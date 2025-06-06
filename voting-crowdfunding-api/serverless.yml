@@ -1,0 +1,63 @@
+service: voting-crowdfunding-api
+frameworkVersion: '3'
+
+provider:
+  name: aws
+  runtime: nodejs18.x
+  region: us-east-1
+  environment:
+    NODE_ENV: local
+  memorySize: 512
+  timeout: 30
+
+functions:
+  createUpdateProposal:
+    handler: src/handler.createUpdateProposal
+    events:
+      - http:
+          path: /proposals
+          method: post
+          cors: true
+
+  reviewProposal:
+    handler: src/handler.reviewProposal
+    events:
+      - http:
+          path: /proposals/{id}/review
+          method: post
+          cors: true
+
+  invest:
+    handler: src/handler.invest
+    events:
+      - http:
+          path: /proposals/{id}/invest
+          method: post
+          cors: true
+  
+  vote:
+    handler: src/handler.vote
+    events:
+      - http:
+          path: /vote
+          method: get
+          cors: true
+
+  comment:
+    handler: src/handler.comment
+    events:
+      - http:
+          path: /comment
+          method: get
+          cors: true
+
+plugins:
+  - serverless-offline
+
+custom:
+  serverless-offline:
+    httpPort: 3000
+    noPrependStageInUrl: true
+    noTimeout: true
+    allowCache: false
+    useChildProcesses: false

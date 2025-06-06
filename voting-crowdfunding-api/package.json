@@ -1,0 +1,18 @@
+{
+  "name": "voting-crowdfunding-api",
+  "version": "1.0.0",
+  "main": "index.js",
+  "scripts": {
+    "start": "serverless offline --noTimeout",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "devDependencies": {
+    "serverless": "^3.35.0",
+    "serverless-offline": "^12.0.4"
+  },
+  "dependencies": {
+    "mssql": "^8.1.4",
+    "sequelize": "^6.37.7",
+    "tedious": "^15.1.2"
+  }
+}
