@@ -1,0 +1,25 @@
+const jwt = require('jsonwebtoken');
+const { reviewProposal } = require('../data-access/reviewData');
+
+const JWT_SECRET = 'tu_secreto_jwt';
+
+async function reviewProposalService(reviewObj, token) {
+  const decoded = jwt.verify(token, JWT_SECRET);
+  if (!decoded.roles.includes('ProposalReviewer') || decoded.userID !== reviewObj.reviewerID) {
+    throw new Error('Usuario no autorizado');
+  }
+
+  const result = await reviewProposal({
+    proposalID: reviewObj.proposalID,
+    reviewerID: reviewObj.reviewerID,
+    validationResult: reviewObj.validationResult,
+    aiPayload: reviewObj.aiPayload
+  });
+
+  return {
+    success: result.success,
+    returnValue: result.returnValue // Propagar el valor de retorno
+  };
+}
+
+module.exports = { reviewProposalService };

@@ -12,26 +12,26 @@ provider:
 
 functions:
   createUpdateProposal:
-    handler: src/handler.createUpdateProposal
+    handler: src/handlers/proposal.createUpdateProposal
     events:
       - http:
-          path: /proposals
+          path: proposals
           method: post
           cors: true
 
   reviewProposal:
-    handler: src/handler.reviewProposal
+    handler: src/handlers/review.reviewProposal
     events:
       - http:
-          path: /proposals/{id}/review
+          path: proposals/{proposalID}/review
           method: post
           cors: true
-
+          
   invest:
-    handler: src/handler.invest
+    handler: src/handlers/investment.invest
     events:
       - http:
-          path: /proposals/{id}/invest
+          path: investments
           method: post
           cors: true
   
