@@ -1,15 +1,16 @@
+// src/handlers/investment.js
 const { investService } = require('../services/investmentService');
 
 module.exports.invest = async (event) => {
   try {
-    const body = JSON.parse(event.body);
+    const body = JSON.parse(event.body || '{}');
     const token = event.headers.Authorization?.replace('Bearer ', '');
 
     const investmentObj = {
       proposalID: body.proposalID,
-      userID: body.userID,
-      amount: body.amount,
-      paymentMethodID: body.paymentMethodID
+      userID: body.userID || 1,
+      amount: body.amount || 1000.00,
+      paymentMethodID: body.paymentMethodID || 1
     };
 
     if (!investmentObj.proposalID || !investmentObj.userID || !investmentObj.amount || !investmentObj.paymentMethodID) {
@@ -25,14 +26,14 @@ module.exports.invest = async (event) => {
       statusCode: 200,
       body: JSON.stringify({
         success: result.success,
-        returnValue: result.returnValue, // Usar el valor real del SP
+        returnValue: result.returnValue,
         message: 'Inversión procesada exitosamente'
       })
     };
   } catch (err) {
-    console.error('Error en invertir:', err);
+    console.error('Error en invest:', err);
     return {
-      statusCode: 400,
+      statusCode: 500,
       body: JSON.stringify({ success: false, error: err.message })
     };
   }

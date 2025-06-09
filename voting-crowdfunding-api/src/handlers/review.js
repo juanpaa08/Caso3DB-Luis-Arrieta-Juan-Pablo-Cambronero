@@ -1,16 +1,17 @@
+// src/handlers/review.js
 const { reviewProposalService } = require('../services/reviewService');
 
 module.exports.reviewProposal = async (event) => {
   try {
-    const body = JSON.parse(event.body);
+    const body = JSON.parse(event.body || '{}');
     const token = event.headers.Authorization?.replace('Bearer ', '');
-    const proposalID = event.pathParameters.proposalID;
+    const proposalID = event.pathParameters?.proposalID;
 
     const reviewObj = {
       proposalID: parseInt(proposalID),
-      reviewerID: body.reviewerID,
-      validationResult: body.validationResult,
-      aiPayload: body.aiPayload
+      reviewerID: body.reviewerID || 1,
+      validationResult: body.validationResult || 'Approved',
+      aiPayload: body.aiPayload || null
     };
 
     if (!reviewObj.proposalID || !reviewObj.reviewerID || !reviewObj.validationResult) {
@@ -26,14 +27,14 @@ module.exports.reviewProposal = async (event) => {
       statusCode: 200,
       body: JSON.stringify({
         success: result.success,
-        returnValue: result.returnValue, // Usar el valor real del SP
+        returnValue: result.returnValue,
         message: 'Propuesta revisada exitosamente'
       })
     };
   } catch (err) {
     console.error('Error en reviewProposal:', err);
     return {
-      statusCode: 400,
+      statusCode: 500,
       body: JSON.stringify({ success: false, error: err.message })
     };
   }

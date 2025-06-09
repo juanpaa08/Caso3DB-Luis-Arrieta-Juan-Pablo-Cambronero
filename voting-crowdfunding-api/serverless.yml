@@ -26,7 +26,7 @@ functions:
           path: proposals/{proposalID}/review
           method: post
           cors: true
-          
+        
   invest:
     handler: src/handlers/investment.invest
     events:
@@ -34,7 +34,7 @@ functions:
           path: investments
           method: post
           cors: true
-  
+
   vote:
     handler: src/handler.vote
     events:

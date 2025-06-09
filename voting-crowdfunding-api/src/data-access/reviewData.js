@@ -1,3 +1,4 @@
+// src/data-access/reviewData.js
 const { getConnection, sql } = require('../../db');
 
 async function reviewProposal(reviewData) {
@@ -12,7 +13,7 @@ async function reviewProposal(reviewData) {
     const result = await request.execute('revisarPropuesta');
     return {
       success: result.returnValue === 0,
-      returnValue: result.returnValue // Devolver el valor real del SP
+      returnValue: result.returnValue
     };
   } catch (err) {
     throw new Error(`Error al llamar a revisarPropuesta: ${err.message}`);

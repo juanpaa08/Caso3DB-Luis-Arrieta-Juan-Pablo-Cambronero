@@ -1,44 +1,43 @@
-const { getConnection, sql, sequelize } = require('../db');
+// src/handler.js
+const proposalService = require('./services/proposalService');
+const reviewService = require('./services/reviewService');
+const investmentService = require('./services/investmentService');
 const ProposalType = require('./models/proposalType');
 const Currency = require('./models/currency');
 
-// Función reutilizable para ejecutar SPs
-const executeSP = async (spName, inputs) => {
-  const pool = await getConnection();
-  const request = pool.request();
-
-  Object.entries(inputs).forEach(([key, { type, value }]) => {
-    request.input(key, type, value);
-  });
-
-  const query = `
-    DECLARE @returnValue INT;
-    EXEC @returnValue = ${spName}
-      ${Object.keys(inputs).map(k => `@${k}`).join(', ')};
-    SELECT @returnValue AS returnValue;
-  `;
-
-  const result = await request.query(query);
-  return result.recordset[0].returnValue;
-};
-
 module.exports.createUpdateProposal = async (event) => {
   try {
-    const returnValue = await executeSP('crearActualizarPropuesta', {
-      proposalID: { type: sql.Int, value: null },
-      userID: { type: sql.Int, value: 1 },
-      title: { type: sql.NVarChar, value: event.body?.title || 'Test Proposal' },
-      description: { type: sql.NVarChar, value: event.body?.description || 'Test Description' },
-      targetPopulation: { type: sql.NVarChar, value: 'Jóvenes' },
-      fileData: { type: sql.VarBinary, value: null },
-      statusID: { type: sql.Int, value: 1 }
-    });
+    const body = JSON.parse(event.body || '{}');
+    const token = event.headers.Authorization?.replace('Bearer ', '');
+
+    const proposalObj = {
+      proposalID: body.proposalID || null,
+      title: body.title || 'Test Proposal',
+      userID: body.userID || 1,
+      proposalTypeID: body.proposalTypeID || 1
+    };
+
+    if (!proposalObj.title || !proposalObj.userID || !proposalObj.proposalTypeID) {
+      return {
+        statusCode: 400,
+        body: JSON.stringify({ success: false, error: 'Faltan campos requeridos' })
+      };
+    }
+
+    const result = await proposalService.createUpdateProposalService(proposalObj, token);
 
     return {
       statusCode: 200,
-      body: JSON.stringify({ success: true, returnValue })
+      body: JSON.stringify({
+        success: true,
+        proposalID: result.proposalID,
+        status: result.status,
+        integrityHash: result.integrityHash,
+        aiPayload: result.aiPayload
+      })
     };
   } catch (err) {
+    console.error('Error en createUpdateProposal:', err);
     return {
       statusCode: 500,
       body: JSON.stringify({ success: false, error: err.message })
@@ -46,21 +45,38 @@ module.exports.createUpdateProposal = async (event) => {
   }
 };
 
-// Similar para reviewProposal e invest (misma estructura)
 module.exports.reviewProposal = async (event) => {
   try {
-    const returnValue = await executeSP('revisarPropuesta', {
-      proposalID: { type: sql.Int, value: event.pathParameters.id },
-      reviewerID: { type: sql.Int, value: 1 },
-      validationResult: { type: sql.NVarChar, value: 'Approved' },
-      aiPayload: { type: sql.NVarChar, value: null }
-    });
+    const body = JSON.parse(event.body || '{}');
+    const token = event.headers.Authorization?.replace('Bearer ', '');
+    const proposalID = event.pathParameters?.proposalID;
+
+    const reviewObj = {
+      proposalID: parseInt(proposalID),
+      reviewerID: body.reviewerID || 1,
+      validationResult: body.validationResult || 'Approved',
+      aiPayload: body.aiPayload || null
+    };
+
+    if (!reviewObj.proposalID || !reviewObj.reviewerID || !reviewObj.validationResult) {
+      return {
+        statusCode: 400,
+        body: JSON.stringify({ success: false, error: 'Faltan campos requeridos' })
+      };
+    }
+
+    const result = await reviewService.reviewProposalService(reviewObj, token);
 
     return {
       statusCode: 200,
-      body: JSON.stringify({ success: true, returnValue })
+      body: JSON.stringify({
+        success: result.success,
+        returnValue: result.returnValue,
+        message: 'Propuesta revisada exitosamente'
+      })
     };
   } catch (err) {
+    console.error('Error en reviewProposal:', err);
     return {
       statusCode: 500,
       body: JSON.stringify({ success: false, error: err.message })
@@ -70,18 +86,35 @@ module.exports.reviewProposal = async (event) => {
 
 module.exports.invest = async (event) => {
   try {
-    const returnValue = await executeSP('invertir', {
-      proposalID: { type: sql.Int, value: event.pathParameters.id },
-      userID: { type: sql.Int, value: 1 },
-      amount: { type: sql.Decimal(18,2), value: 1000.00 },
-      paymentMethodID: { type: sql.Int, value: 1 }
-    });
+    const body = JSON.parse(event.body || '{}');
+    const token = event.headers.Authorization?.replace('Bearer ', '');
+
+    const investmentObj = {
+      proposalID: body.proposalID,
+      userID: body.userID || 1,
+      amount: body.amount || 1000.00,
+      paymentMethodID: body.paymentMethodID || 1
+    };
+
+    if (!investmentObj.proposalID || !investmentObj.userID || !investmentObj.amount || !investmentObj.paymentMethodID) {
+      return {
+        statusCode: 400,
+        body: JSON.stringify({ success: false, error: 'Faltan campos requeridos' })
+      };
+    }
+
+    const result = await investmentService.investService(investmentObj, token);
 
     return {
       statusCode: 200,
-      body: JSON.stringify({ success: true, returnValue })
+      body: JSON.stringify({
+        success: result.success,
+        returnValue: result.returnValue,
+        message: 'Inversión procesada exitosamente'
+      })
     };
   } catch (err) {
+    console.error('Error en invest:', err);
     return {
       statusCode: 500,
       body: JSON.stringify({ success: false, error: err.message })

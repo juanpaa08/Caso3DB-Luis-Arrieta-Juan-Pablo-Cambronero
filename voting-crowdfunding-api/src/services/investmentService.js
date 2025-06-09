@@ -1,3 +1,4 @@
+// src/services/investmentService.js
 const jwt = require('jsonwebtoken');
 const { invest } = require('../data-access/investmentData');
 
@@ -18,7 +19,7 @@ async function investService(investmentObj, token) {
 
   return {
     success: result.success,
-    returnValue: result.returnValue // Propagar el valor de retorno
+    returnValue: result.returnValue
   };
 }
 

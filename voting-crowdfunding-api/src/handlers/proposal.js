@@ -1,15 +1,16 @@
+// src/handlers/proposal.js
 const { createUpdateProposalService } = require('../services/proposalService');
 
 module.exports.createUpdateProposal = async (event) => {
   try {
-    const body = JSON.parse(event.body);
+    const body = JSON.parse(event.body || '{}');
     const token = event.headers.Authorization?.replace('Bearer ', '');
 
     const proposalObj = {
       proposalID: body.proposalID || null,
-      title: body.title,
-      userID: body.userID,
-      proposalTypeID: body.proposalTypeID
+      title: body.title || 'Test Proposal',
+      userID: body.userID || 1,
+      proposalTypeID: body.proposalTypeID || 1
     };
 
     if (!proposalObj.title || !proposalObj.userID || !proposalObj.proposalTypeID) {
@@ -34,7 +35,7 @@ module.exports.createUpdateProposal = async (event) => {
   } catch (err) {
     console.error('Error en createUpdateProposal:', err);
     return {
-      statusCode: 400,
+      statusCode: 500,
       body: JSON.stringify({ success: false, error: err.message })
     };
   }

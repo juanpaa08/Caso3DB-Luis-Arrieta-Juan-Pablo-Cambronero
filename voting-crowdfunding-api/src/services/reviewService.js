@@ -1,3 +1,4 @@
+// src/services/reviewService.js
 const jwt = require('jsonwebtoken');
 const { reviewProposal } = require('../data-access/reviewData');
 
@@ -18,7 +19,7 @@ async function reviewProposalService(reviewObj, token) {
 
   return {
     success: result.success,
-    returnValue: result.returnValue // Propagar el valor de retorno
+    returnValue: result.returnValue
   };
 }
 
