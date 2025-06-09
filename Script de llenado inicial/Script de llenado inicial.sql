@@ -15,9 +15,44 @@ VALUES (1, 'Proyecto Municipal', 'Infraestructura urbana', 'Local', 'Infraestruc
 INSERT INTO [dbo].[pv_currencies] (currencyID, name, acronym, symbol, country)
 VALUES (1, 'US Dollar', 'USD', '$', 'USA'), (2, 'Euro', 'EUR', '€', 'Alemania');
 
--- Insertar métodos de pago
-INSERT INTO [dbo].[pv_paymentMethods] (name, methodType, config, status, createdAt, methodHash)
-VALUES ('Credit Card', 'Tarjeta de crédito', CONVERT(VARBINARY(MAX), 'Configuracion segura'), 'Activo', '2025-01-01', NULL);
+-- Insertar PaymentMethods
+INSERT INTO dbo.pv_paymentMethods
+  (
+    name,
+    secretKey,
+    [key],
+    apiURL,
+    logoURL,
+    configJSON,
+    lastUpdated,
+    enabled
+  )
+VALUES
+  (
+    -- Nombre legible
+    N'Credit Card',
+
+    -- Clave secreta (20 chars max)
+    N'SECRETKEY_123456789',
+
+    -- API-Key cifrada/convertida a varbinary
+    CONVERT(varbinary(250), N'APIKEY_ABCDEFG12345'),
+
+    -- URL de tu servicio (rellena hasta 20 chars)
+    N'https://api.pay/v1',
+
+    -- Fecha de “logo” (tal y como tienes definido datetime)
+    '2025-06-10',
+
+    -- Configuración en JSON convertida a varbinary
+    CONVERT(varbinary(250), N'{"merchantId":"M123","currency":"USD"}'),
+
+    -- Última actualización
+    GETDATE(),
+
+    -- 1 = habilitado, 0 = deshabilitado
+    1
+  );
 
 -- Insertar usuarios
 INSERT INTO [dbo].[pv_users] (name, lastname, birthDate, registerDate, lastUpdate, accountStatusID, identityHash, password, failedAttempts, publicKey, privateKeyEncrypted)
@@ -29,7 +64,7 @@ VALUES
     ('user4', 'Apellido5', GETDATE(), GETDATE(), GETDATE(), 2, 'x7k9p2m4q4', CONVERT(VARBINARY(MAX), '123'), 1, CONVERT(VARBINARY(MAX), 'Llave5'), CONVERT(VARBINARY(MAX), 'LlaveEn5')),
     ('user5', 'Apellido6', GETDATE(), GETDATE(), GETDATE(), 3, 'x7k9p2m4q5', CONVERT(VARBINARY(MAX), '123'), 0, CONVERT(VARBINARY(MAX), 'Llave6'), CONVERT(VARBINARY(MAX), 'LlaveEn6'));
 
-	DBCC CHECKIDENT (pv_votingResult, RESEED, 0);
+	DBCC CHECKIDENT (pv_users, RESEED, 0);
 	
 
 	select * from pv_accountStatus;
@@ -39,8 +74,6 @@ VALUES
 	select * from pv_propposals;
 	select * from pv_users;
 	select * from pv_groupTypes;
-	select * from pv_groupStatus;
-	select * from pv_groupVisibilities;
 	select * from pv_groups;
 	select * from pv_projectStatuses;
 	select * from pv_projects;
@@ -70,32 +103,37 @@ VALUES
 
 
 -- Insertar datos demográficos para los usuarios
-INSERT INTO [dbo].[pv_userDemographics] (userID, userDemographicTypeID, valueString, valueNumeric, valueDate, valueBool)
+INSERT INTO dbo.pv_userDemographics (userID, userDemographicTypeID, value)
 VALUES
-    -- user1 (userID = 1)
-    (1, 1, 'Masculino', 0, '1900-01-01', 0), -- Sexo
-    (1, 2, '', 35, '1900-01-01', 0),        -- Edad
-    (1, 3, 'San José', 0, '1900-01-01', 0), -- Región
-    -- user2 (userID = 2)
-    (2, 1, 'Femenino', 0, '1900-01-01', 0), -- Sexo
-    (2, 2, '', 40, '1900-01-01', 0),        -- Edad
-    (2, 3, 'Alajuela', 0, '1900-01-01', 0), -- Región
-    -- admin (userID = 3)
-    (3, 1, 'Masculino', 0, '1900-01-01', 0), -- Sexo
-    (3, 2, '', 45, '1900-01-01', 0),        -- Edad
-    (3, 3, 'Heredia', 0, '1900-01-01', 0),  -- Región
-    -- user3 (userID = 4)
-    (4, 1, 'Femenino', 0, '1900-01-01', 0), -- Sexo
-    (4, 2, '', 30, '1900-01-01', 0),        -- Edad
-    (4, 3, 'Cartago', 0, '1900-01-01', 0),  -- Región
-    -- user4 (userID = 5)
-    (5, 1, 'Masculino', 0, '1900-01-01', 0), -- Sexo
-    (5, 2, '', 50, '1900-01-01', 0),        -- Edad
-    (5, 3, 'Guanacaste', 0, '1900-01-01', 0), -- Región
-    -- user5 (userID = 6)
-    (6, 1, 'Femenino', 0, '1900-01-01', 0), -- Sexo
-    (6, 2, '', 25, '1900-01-01', 0),        -- Edad
-    (6, 3, 'Puntarenas', 0, '1900-01-01', 0); -- Región
+  -- user1 (userID = 1)
+  (1, 1, N'Masculino'),  -- Sexo
+  (1, 2, N'35'),         -- Edad
+  (1, 3, N'San José'),   -- Región
+
+  -- user2 (userID = 2)
+  (2, 1, N'Femenino'),   -- Sexo
+  (2, 2, N'40'),         -- Edad
+  (2, 3, N'Alajuela'),   -- Región
+
+  -- admin (userID = 3)
+  (3, 1, N'Masculino'),  -- Sexo
+  (3, 2, N'45'),         -- Edad
+  (3, 3, N'Heredia'),    -- Región
+
+  -- user3 (userID = 4)
+  (4, 1, N'Femenino'),   -- Sexo
+  (4, 2, N'30'),         -- Edad
+  (4, 3, N'Cartago'),    -- Región
+
+  -- user4 (userID = 5)
+  (5, 1, N'Masculino'),  -- Sexo
+  (5, 2, N'50'),         -- Edad
+  (5, 3, N'Guanacaste'), -- Región
+
+  -- user5 (userID = 6)
+  (6, 1, N'Femenino'),   -- Sexo
+  (6, 2, N'25'),         -- Edad
+  (6, 3, N'Puntarenas'); -- Región
 
 
 -- Insertar propuestas
@@ -106,21 +144,17 @@ VALUES
 
 
 -- Insertar tipos de grupos de población meta
-INSERT INTO [dbo].[pv_groupTypes] (name, isActive, createdAt, updatedtAt)
-VALUES ('Tipo1', 1, GETDATE(), GETDATE());
+INSERT INTO [dbo].[pv_groupTypes] (name, isActive)
+VALUES ('Tipo1', 1);
 
--- Insertar estados de grupos de población meta
-INSERT INTO [dbo].[pv_groupStatus] (name, isActive, createdAt, updatedAt)
-VALUES ('Estado1', 1, GETDATE(), GETDATE());
-
--- Insertar estados de grupos de población meta
-INSERT INTO [dbo].[pv_groupVisibilities] (code, name, isActive, createdAt)
-VALUES ('123', 'GrupoVisible1', 1, GETDATE());
 
 
 -- Insertar grupos de población meta
-INSERT INTO [dbo].[pv_groups] (name, description, groupTypeID, createdAt, userID, groupStatusID, groupVisibilityID, maxMembers)
-VALUES ('Asociacion ecologica', 'Grupo ambiental', 1, GETDATE(), 1, 1, 1, 23);
+INSERT INTO dbo.pv_groups
+  (name, groupTypeID, createdAt, isActive)
+VALUES
+  (N'Asociacion ecologica', 1,   GETDATE(),       1);
+
 
 INSERT INTO [dbo].[pv_proposalTargetGroups] (proposalID, groupID, createdAt)
 VALUES (1, 1, GETDATE()), (2, 1, GETDATE());
@@ -186,21 +220,15 @@ VALUES
 SELECT * FROM [dbo].[pv_projectMilestones];
 
 -- Insertar votación (simples para pruebas)
-INSERT INTO [dbo].[pv_votings] (proposalID, status, configurationHash, createdAt, userID, quorum, projectID)
+INSERT INTO [dbo].[pv_votings] (proposalID, status, configurationHash, createdAt, quorum, projectID)
 VALUES
-    (1, 'Finalizado', CONVERT(VARBINARY(MAX), 'c7k9p2m1'), '2025-06-06 10:00:00', 2, 1, 1),
-    (2, 'Finalizado', CONVERT(VARBINARY(MAX), 'c7k9p2m2'), '2025-06-05 14:30:00', 2, 1, 1),
-    (1, 'Finalizado', CONVERT(VARBINARY(MAX), 'c7k9p2m3'), '2025-06-04 09:15:00', 2, 1, 1),
-    (2, 'Finalizado', CONVERT(VARBINARY(MAX), 'c7k9p2m4'), '2025-06-03 16:45:00', 2, 1, 1),
-    (1, 'Finalizado', CONVERT(VARBINARY(MAX), 'c7k9p2m5'), '2025-06-02 12:00:00', 2, 1, 1);
+    (1, 'Finalizado', CONVERT(VARBINARY(MAX), 'c7k9p2m1'), '2025-06-06 10:00:00', 1, 1),
+    (2, 'Finalizado', CONVERT(VARBINARY(MAX), 'c7k9p2m2'), '2025-06-05 14:30:00', 1, 1),
+    (1, 'Finalizado', CONVERT(VARBINARY(MAX), 'c7k9p2m3'), '2025-06-04 09:15:00', 1, 1),
+    (2, 'Finalizado', CONVERT(VARBINARY(MAX), 'c7k9p2m4'), '2025-06-03 16:45:00', 1, 1),
+    (1, 'Finalizado', CONVERT(VARBINARY(MAX), 'c7k9p2m5'), '2025-06-02 12:00:00', 1, 1);
 
 	select * from pv_votings;
-
-INSERT INTO [dbo].[pv_votingRuleTypes] (code, name, description, isActive, createdAt, updatedAt)
-VALUES ('001', 'Regla1', 'Esta es una regla de votacion', 1, GETDATE(), GETDATE());
-
-INSERT INTO [dbo].[pv_votingRules] (name, description, ruleType, value, createdAt, status)
-VALUES ('Quorum', '100 votos minimos', 1, '100', GETDATE(), 'Activo');
 
 
 -- Insertar datos en pv_votingResult
