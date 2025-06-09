@@ -48,6 +48,7 @@ VALUES
 	SELECT * FROM [dbo].[pv_userDemographicTypes];
 	select * from pv_userDemographics;
 	select * from pv_proposalTargetGroups;
+	select * from pv_projectMilestones;
 
 
 

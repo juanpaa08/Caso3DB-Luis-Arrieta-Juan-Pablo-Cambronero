@@ -5,5 +5,5 @@ const payload = {
   userID: 1, // Coincide con el userID del body
   roles: ['ProposalCreator'] // Añade el rol requerido
 };
-const token = jwt.sign(payload, JWT_SECRET, { expiresIn: '1h' });
+const token = jwt.sign(payload, JWT_SECRET, { expiresIn: '2h' });
 console.log(token);
