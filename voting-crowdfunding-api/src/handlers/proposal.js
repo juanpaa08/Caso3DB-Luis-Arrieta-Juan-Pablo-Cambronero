@@ -10,7 +10,9 @@ module.exports.createUpdateProposal = async (event) => {
       proposalID: body.proposalID || null,
       title: body.title || 'Test Proposal',
       userID: body.userID || 1,
-      proposalTypeID: body.proposalTypeID || 1
+      proposalTypeID: body.proposalTypeID || 1,
+      targetGroups: body.targetGroups || [],
+      documents: body.documents || []
     };
 
     if (!proposalObj.title || !proposalObj.userID || !proposalObj.proposalTypeID) {

@@ -386,7 +386,7 @@ INSERT INTO [dbo].[pv_proposalDocument] (proposalID, proposalVersionID, fileName
 VALUES 
     (1, 1, N'Propuesta_Tecnica_V1.pdf', CONVERT(varbinary(250), HASHBYTES('SHA2_256', 'DOC_001')), 1024, N'PDF', '2025-06-10 10:51:00', 2, CONVERT(varbinary(250), 'STOR_LOC_001'), 1, 1, 2, 1),
     (2, 1, N'App_Crowdfunding_Doc.pdf', CONVERT(varbinary(250), HASHBYTES('SHA2_256', 'DOC_002')), 2048, N'PDF', '2025-06-10 10:51:00', 1, CONVERT(varbinary(250), 'STOR_LOC_002'), 2, NULL, 2, 2),
-    (3, 1, N'Invest_Solar_Report.jpg', CONVERT(varbinary(250), HASHBYTES('SHA2_256', 'DOC_003')), 512, N'JPG', '2025-06-10 10:51:00', 4, CONVERT(varbinary(250), 'STOR_LOC_003'), 3, 2, 1, 3);
+    (3, 1, N'Invest_Solar_Report.jpg', CONVERT(varbinary(250)), HASHBYTES('SHA2_256', 'DOC_003'), 512, N'JPG', '2025-06-10 10:51:00', 4, CONVERT(varbinary(250), 'STOR_LOC_003'), 3, 2, 1, 3);
 
 
 

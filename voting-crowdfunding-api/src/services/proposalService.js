@@ -19,7 +19,9 @@ async function createUpdateProposalService(proposalObj, token) {
     title: proposalObj.title,
     userID: proposalObj.userID,
     proposalTypeID: proposalObj.proposalTypeID,
-    integrityHash: integrityHash
+    integrityHash: integrityHash,
+    targetGroups: proposalObj.targetGroups,
+    documents: proposalObj.documents
   });
 
   return {
