@@ -218,8 +218,6 @@ EXEC dbo.sp_Invertir
     1;          -- @paymentMethodID
 
 
-DROP PROCEDURE sp_Invertir;
-
 
 SELECT * FROM pv_users;
 SELECT * FROM pv_propposals;

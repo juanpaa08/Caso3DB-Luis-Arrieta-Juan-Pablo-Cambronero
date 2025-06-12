@@ -7,13 +7,13 @@ module.exports.invest = async (event) => {
     const token = event.headers.Authorization?.replace('Bearer ', '');
 
     const investmentObj = {
-      proposalID: body.proposalID,
+      projectID: body.projectID,
       userID: body.userID || 1,
       amount: body.amount || 1000.00,
       paymentMethodID: body.paymentMethodID || 1
     };
 
-    if (!investmentObj.proposalID || !investmentObj.userID || !investmentObj.amount || !investmentObj.paymentMethodID) {
+    if (!investmentObj.projectID || !investmentObj.userID || !investmentObj.amount || !investmentObj.paymentMethodID) {
       return {
         statusCode: 400,
         body: JSON.stringify({ success: false, error: 'Faltan campos requeridos' })
@@ -26,7 +26,11 @@ module.exports.invest = async (event) => {
       statusCode: 200,
       body: JSON.stringify({
         success: result.success,
-        returnValue: result.returnValue,
+        data: {
+          contribution: result.contribution,
+          installments: result.installments,
+          reviews: result.reviews
+        },
         message: 'Inversión procesada exitosamente'
       })
     };

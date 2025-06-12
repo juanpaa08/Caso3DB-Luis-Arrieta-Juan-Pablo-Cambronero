@@ -1,26 +1,24 @@
 // src/services/investmentService.js
-const jwt = require('jsonwebtoken');
 const { invest } = require('../data-access/investmentData');
+const jwt = require('jsonwebtoken');
 
 const JWT_SECRET = 'tu_secreto_jwt';
 
 async function investService(investmentObj, token) {
-  const decoded = jwt.verify(token, JWT_SECRET);
-  if (!decoded.roles.includes('Investor') || decoded.userID !== investmentObj.userID) {
-    throw new Error('Usuario no autorizado');
+  try {
+    // Verificar el token JWT
+    const decoded = jwt.verify(token, JWT_SECRET);
+    if (!decoded.userID || decoded.userID !== investmentObj.userID) {
+      throw new Error('Token inválido o userID no coincide');
+    }
+
+    // Llamar a la capa de datos
+    const result = await invest(investmentObj);
+
+    return result;
+  } catch (err) {
+    throw new Error(`Error en investService: ${err.message}`);
   }
-
-  const result = await invest({
-    proposalID: investmentObj.proposalID,
-    userID: investmentObj.userID,
-    amount: investmentObj.amount,
-    paymentMethodID: investmentObj.paymentMethodID
-  });
-
-  return {
-    success: result.success,
-    returnValue: result.returnValue
-  };
 }
 
 module.exports = { investService };
