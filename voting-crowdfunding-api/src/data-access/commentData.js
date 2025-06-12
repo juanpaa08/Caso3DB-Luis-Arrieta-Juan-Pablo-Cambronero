@@ -1,9 +1,9 @@
-const pv_proposals       = require('../models/pv_proposals.js');
-const pv_proposalCore    = require('../models/pv_proposalCore.js');
+const pv_propposals = require('../models/pv_propposals.js');
+const pv_proposalCore = require('../models/pv_proposalCore.js');
 const pv_proposalComment = require('../models/pv_proposalComment.js');
 
 async function obtenerPropuestaPorID(proposalID) {
-  return await pv_proposals.findByPk(proposalID);
+  return await pv_propposals.findByPk(proposalID);
 }
 
 async function obtenerCorePorProposalID(proposalID) {
@@ -12,15 +12,14 @@ async function obtenerCorePorProposalID(proposalID) {
   });
 }
 
-async function insertarComentario({ proposalID, content, status, versionID }) {
+async function insertarComentario({ proposalID, content, status }) {
   return await pv_proposalComment.create({
     proposalID,
     content,
-    publishDate: new Date(),
     status,
     likes: 0,
     reports: 0,
-    proposalVersionID: versionID
+    proposalVersion: 1
   });
 }
 

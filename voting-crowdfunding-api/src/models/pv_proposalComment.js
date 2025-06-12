@@ -1,5 +1,4 @@
 const { Model, DataTypes } = require('sequelize');
-// Subimos dos niveles hasta db.js
 const { sequelize } = require('../../db');
 
 class pv_proposalComment extends Model {}
@@ -23,8 +22,8 @@ pv_proposalComment.init({
   },
   publishDate: {
     type: DataTypes.DATE,
-    allowNull: false,
-    defaultValue: DataTypes.NOW,
+    allowNull: true, // Cambiamos a true temporalmente para evitar validación
+    defaultValue: sequelize.fn('GETDATE'), // Usa la función GETDATE de SQL Server
     field: 'publishDate'
   },
   status: {
@@ -44,10 +43,11 @@ pv_proposalComment.init({
     defaultValue: 0,
     field: 'reports'
   },
-  proposalVersionID: {
+  proposalVersion: {
     type: DataTypes.INTEGER,
     allowNull: false,
-    field: 'proposalVersionID'
+    defaultValue: 1,
+    field: 'proposalVersion'
   }
 }, {
   sequelize,

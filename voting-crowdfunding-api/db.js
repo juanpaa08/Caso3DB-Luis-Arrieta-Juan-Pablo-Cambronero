@@ -36,7 +36,7 @@ const sequelize = new Sequelize('Caso3DB', 'root', '12345', {
       trustServerCertificate: true
     }
   },
-  logging: false // Desactiva logs SQL para mantener la consola limpia
+  logging: console.log // Desactiva logs SQL para mantener la consola limpia
 });
 
 // Verificar conexión de Sequelize

@@ -1,10 +1,9 @@
 const { Model, DataTypes } = require('sequelize');
-// Subimos dos niveles: src/models → src → raíz (donde está db.js)
 const { sequelize } = require('../../db');
 
-class pv_proposals extends Model {}
+class pv_propposals extends Model {}
 
-pv_proposals.init({
+pv_propposals.init({
   proposalID: {
     type: DataTypes.INTEGER,
     primaryKey: true,
@@ -38,11 +37,11 @@ pv_proposals.init({
   }
 }, {
   sequelize,
-  modelName: 'pv_proposals',
-  tableName: 'pv_proposals',
+  modelName: 'pv_propposals', // Cambiar a pv_propposals
+  tableName: 'pv_propposals', // Cambiar a pv_propposals
   timestamps: true,
   createdAt: 'createdAt',
   updatedAt: 'lastUpdate'
 });
 
-module.exports = pv_proposals;
+module.exports = pv_propposals;

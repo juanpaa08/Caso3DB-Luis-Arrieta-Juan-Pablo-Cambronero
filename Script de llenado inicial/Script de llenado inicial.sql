@@ -661,6 +661,24 @@ VALUES
      7000.00, CONVERT(varbinary(512), HASHBYTES('SHA2_256', 'TXN003')), 1, 1, 3, 3, 1,
      CONVERT(varbinary(512), 'HASH003'));
 
+
+
+USE Caso3DB;
+ALTER TABLE pv_proposalCore
+ALTER COLUMN status NVARCHAR(20) NOT NULL;
+
+
+ALTER TABLE pv_proposalComment
+ALTER COLUMN status NVARCHAR(20) NOT NULL;
+
+UPDATE pv_proposalComment
+SET status = TRIM(status);
+
+USE Caso3DB;
+SELECT COLUMN_NAME, DATA_TYPE, IS_NULLABLE
+FROM INFORMATION_SCHEMA.COLUMNS
+WHERE TABLE_NAME = 'pv_proposalComment' AND COLUMN_NAME = 'proposalVersion';
+
 -- Insertar ProposalCores
 
 INSERT INTO pv_proposalCore (
@@ -688,6 +706,17 @@ VALUES
 (N'Propuesta en revisión interna', N'Potencial para nueva convocatoria', 100000.00, N'0',
  GETDATE(), GETDATE(), 5);
 
+
+
+ALTER TABLE pv_proposalComment
+ADD CONSTRAINT DF_pv_proposalComment_publishDate
+DEFAULT GETDATE() FOR publishDate;
+
+
+USE Caso3DB;
+SELECT COLUMN_NAME, DATA_TYPE, IS_NULLABLE, COLUMN_DEFAULT
+FROM INFORMATION_SCHEMA.COLUMNS
+WHERE TABLE_NAME = 'pv_proposalComment' AND COLUMN_NAME = 'publishDate';
 
 -- Verificación de datos
 SELECT * FROM [dbo].[pv_accountStatus];
@@ -739,3 +768,6 @@ SELECT * FROM [dbo].[pv_balanceTypes];
 SELECT * FROM [dbo].[pv_transactionSubType];
 SELECT * FROM [dbo].[pv_transactionType];
 SELECT * FROM [dbo].[pv_transactions];
+SELECT * FROM [dbo].[pv_proposalCore];
+
+SELECT * FROM pv_proposalComment WHERE proposalID = 1;
