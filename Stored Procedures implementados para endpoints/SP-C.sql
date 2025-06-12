@@ -2,9 +2,6 @@ USE [Caso3DB];
 GO
 
 
-USE [Caso3DB];
-GO
-
 CREATE OR ALTER PROCEDURE dbo.sp_Invertir
     @projectID        INT,
     @userID           INT,
@@ -13,6 +10,7 @@ CREATE OR ALTER PROCEDURE dbo.sp_Invertir
 AS
 BEGIN
     SET NOCOUNT, XACT_ABORT ON;
+    SET TRANSACTION ISOLATION LEVEL SERIALIZABLE;
 
     DECLARE 
         @approvedStatusID   INT,
@@ -30,16 +28,19 @@ BEGIN
         @enclaveID          INT,
         @sigID              INT;
 
+    IF @amount <= 0
+        THROW 50018, 'El monto de inversión debe ser mayor a cero', 1;
+
     BEGIN TRANSACTION;
     BEGIN TRY
-        -- 0) Estado Approved/Aprobado
+        -- Estado aprobado
         SELECT @approvedStatusID = contributionStatusID
           FROM dbo.pv_contributionStatuses
          WHERE LTRIM(RTRIM(name)) IN (N'Approved', N'Aprobado');
         IF @approvedStatusID IS NULL
             THROW 50015, 'Falta estado Approved/Aprobado', 1;
 
-        -- 0.1) Obtener o crear llave criptográfica
+        -- Obtener o crear llave criptográfica
         SELECT TOP 1 @cryptoKeyID = cryptographicKeyID
           FROM dbo.pv_cryptographicKeys
          WHERE userID = @userID
@@ -53,24 +54,28 @@ BEGIN
             SET @hashKey = HASHBYTES('SHA2_256', @newKey);
 
             SELECT TOP 1
-                @keyTypeID = keyTypeID,
-                @algID     = algorithmID,
+                @keyTypeID = keyTypeID
+              FROM dbo.pv_keyTypes
+              ORDER BY createdAt DESC;
+
+            SELECT TOP 1
+                @algID = algorithmID
+              FROM dbo.pv_algorithms
+              ORDER BY createdAt DESC;
+
+            SELECT TOP 1
                 @mainUseID = mainUseID
-              FROM dbo.pv_keyTypes kt
-              JOIN dbo.pv_algorithms a       ON 1=1
-              JOIN dbo.pv_mainUses mu       ON 1=1;
+              FROM dbo.pv_mainUses
+              ORDER BY createdAt DESC;
 
             SELECT TOP 1
                 @enclaveID = secureEnclaveID,
                 @sigID     = digitalSignatureID
               FROM dbo.pv_secureEnclave se
-              JOIN dbo.pv_digitalSignature ds ON 1=1;
+              JOIN dbo.pv_digitalSignature ds ON 1=1
+              ORDER BY se.createdAt DESC;
 
-            IF @keyTypeID    IS NULL
-            OR @algID        IS NULL
-            OR @mainUseID    IS NULL
-            OR @enclaveID    IS NULL
-            OR @sigID        IS NULL
+            IF @keyTypeID IS NULL OR @algID IS NULL OR @mainUseID IS NULL OR @enclaveID IS NULL OR @sigID IS NULL
                 THROW 50017, 'Faltan datos maestros para la llave', 1;
 
             INSERT INTO dbo.pv_cryptographicKeys
@@ -95,7 +100,7 @@ BEGIN
             SET @cryptoKeyID = SCOPE_IDENTITY();
         END
 
-        -- 1) Proyecto planificado o en progreso
+        -- Proyecto válido
         IF NOT EXISTS (
             SELECT 1
               FROM dbo.pv_projects p
@@ -104,7 +109,7 @@ BEGIN
         )
             THROW 50010, 'Proyecto no habilitado para inversión', 1;
 
-        -- 2) Usuario existe
+        -- Usuario válido
         IF NOT EXISTS (
             SELECT 1
               FROM dbo.pv_users u
@@ -112,7 +117,7 @@ BEGIN
         )
             THROW 50011, 'Usuario no existe', 1;
 
-        -- 3) Método de pago habilitado
+        -- Método de pago válido
         IF NOT EXISTS (
             SELECT 1
               FROM dbo.pv_paymentMethods pm
@@ -121,7 +126,7 @@ BEGIN
         )
             THROW 50012, 'Método de pago inválido', 1;
 
-        -- 4) Calcular montos
+        -- Calcular montos
         SELECT @totalSolicitado = requestedAmount
           FROM dbo.pv_projects
          WHERE projectID = @projectID;
@@ -138,7 +143,7 @@ BEGIN
 
         SET @equityPct = ROUND(@amount * 100.0 / @totalSolicitado, 2);
 
-        -- 5) Insertar contribución
+        -- Insertar contribución
         INSERT INTO dbo.pv_crowdfundingContributions
         (
             projectID, userID, contributionDate, amount, currencyCode,
@@ -155,7 +160,7 @@ BEGIN
         );
         SET @contribID = SCOPE_IDENTITY();
 
-        -- 6a) Resumen
+        -- Resultado principal
         SELECT
             @contribID        AS contributionID,
             @projectID        AS projectID,
@@ -168,7 +173,7 @@ BEGIN
             @keyAction        AS cryptoKeyAction,
             @approvedStatusID AS statusID;
 
-        -- 6b) 12 cuotas
+        -- 12 cuotas
         ;WITH Months AS (
             SELECT 1 AS MesOffset
             UNION ALL
@@ -181,7 +186,7 @@ BEGIN
         FROM Months
         OPTION (MAXRECURSION 12);
 
-        -- 6c) 4 revisiones
+        -- 4 revisiones
         SELECT
             @contribID                            AS contributionID,
             DATEADD(MONTH, v.ReviewOffset, CAST(GETDATE() AS DATE)) AS reviewDate,
@@ -201,6 +206,7 @@ BEGIN
     END CATCH
 END;
 GO
+
 
 
 -- Invertir
