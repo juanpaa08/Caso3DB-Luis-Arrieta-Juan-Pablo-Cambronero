@@ -1,7 +1,6 @@
-// src/handler.js
-const ProposalType = require('./models/proposalType');
-const Currency = require('./models/currency');
-
+const ProposalType        = require('./models/proposalType');
+const Currency            = require('./models/currency');
+const { comentarPropuesta } = require('./services/commentService');
 
 module.exports.vote = async (event) => {
   try {
@@ -14,13 +13,9 @@ module.exports.vote = async (event) => {
       })
     };
   } catch (err) {
-    console.error('Error en vote:', err);
     return {
       statusCode: 500,
-      body: JSON.stringify({
-        success: false,
-        error: err.message
-      })
+      body: JSON.stringify({ success: false, error: err.message })
     };
   }
 };
@@ -36,13 +31,38 @@ module.exports.comment = async (event) => {
       })
     };
   } catch (err) {
-    console.error('Error en comment:', err);
     return {
       statusCode: 500,
+      body: JSON.stringify({ success: false, error: err.message })
+    };
+  }
+};
+
+module.exports.comentar = async (event) => {
+  try {
+    const userID     = event.requestContext?.authorizer?.principalId || 123;
+    const proposalID = parseInt(event.pathParameters.id, 10);
+    const { content, hasSensitiveContent } = JSON.parse(event.body);
+
+    const result = await comentarPropuesta({
+      userID,
+      proposalID,
+      content,
+      hasSensitiveContent
+    });
+
+    return {
+      statusCode: 201,
       body: JSON.stringify({
-        success: false,
-        error: err.message
+        message: 'Comentario enviado para revisión',
+        commentID: result.proposalCommentID
       })
+    };
+  } catch (err) {
+    console.error('ERROR EN COMENTAR:', err);
+    return {
+      statusCode: err.status || 500,
+      body: JSON.stringify({ error: err.message || 'Error inesperado' })
     };
   }
 };

@@ -661,7 +661,32 @@ VALUES
      7000.00, CONVERT(varbinary(512), HASHBYTES('SHA2_256', 'TXN003')), 1, 1, 3, 3, 1,
      CONVERT(varbinary(512), 'HASH003'));
 
+-- Insertar ProposalCores
 
+INSERT INTO pv_proposalCore (
+  description, benefits, estimatedBudget, status,
+  lastUpdate, createdAt, proposalID
+)
+VALUES
+-- Esta propuesta permite comentarios (status = '1')
+(N'Propuesta básica con impacto local', N'Incremento en participación ciudadana', 50000.00, N'1',
+ GETDATE(), GETDATE(), 1),
+
+-- Otra propuesta activa
+(N'Mejora tecnológica en comunidad', N'Reducción de brecha digital', 75000.00, N'1',
+ GETDATE(), GETDATE(), 2),
+
+-- Esta propuesta NO permite comentarios (status = '0')
+(N'Investigación no disponible aún', N'Mejora científica a largo plazo', 120000.00, N'0',
+ GETDATE(), GETDATE(), 3),
+
+-- Activa
+(N'Aplicación educativa en zonas rurales', N'Aumento en acceso a educación', 90000.00, N'1',
+ GETDATE(), GETDATE(), 4),
+
+-- Otra bloqueada
+(N'Propuesta en revisión interna', N'Potencial para nueva convocatoria', 100000.00, N'0',
+ GETDATE(), GETDATE(), 5);
 
 
 -- Verificación de datos
