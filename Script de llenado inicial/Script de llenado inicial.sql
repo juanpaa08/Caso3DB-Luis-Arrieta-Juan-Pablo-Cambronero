@@ -386,7 +386,7 @@ INSERT INTO [dbo].[pv_proposalDocument] (proposalID, proposalVersionID, fileName
 VALUES 
     (1, 1, N'Propuesta_Tecnica_V1.pdf', CONVERT(varbinary(250), HASHBYTES('SHA2_256', 'DOC_001')), 1024, N'PDF', '2025-06-10 10:51:00', 2, CONVERT(varbinary(250), 'STOR_LOC_001'), 1, 1, 2, 1),
     (2, 1, N'App_Crowdfunding_Doc.pdf', CONVERT(varbinary(250), HASHBYTES('SHA2_256', 'DOC_002')), 2048, N'PDF', '2025-06-10 10:51:00', 1, CONVERT(varbinary(250), 'STOR_LOC_002'), 2, NULL, 2, 2),
-    (3, 1, N'Invest_Solar_Report.jpg', CONVERT(varbinary(250)), HASHBYTES('SHA2_256', 'DOC_003'), 512, N'JPG', '2025-06-10 10:51:00', 4, CONVERT(varbinary(250), 'STOR_LOC_003'), 3, 2, 1, 3);
+    (3, 1, N'Invest_Solar_Report.jpg', CONVERT(varbinary(250), HASHBYTES('SHA2_256', 'DOC_003')), 512, N'JPG', '2025-06-10 10:51:00', 4, CONVERT(varbinary(250), 'STOR_LOC_003'), 3, 2, 1, 3);
 
 
 
@@ -553,6 +553,117 @@ GO
 EXEC [dbo].[sp_SeedVotingResults];
 
 
+
+
+USE [Caso3DB];
+GO
+
+
+
+-- Insertar datos en pv_payments (versión corregida)
+INSERT INTO [dbo].[pv_payments] (
+    paymentMethodID,
+    amount,
+    actualAmount,
+    result,
+    authetication,
+    reference,
+    chargedToken,
+    description,
+    error,
+    paymentDate,
+    checksum,
+    currencyID
+)
+VALUES
+    (1, 5000.00, 5000.00, 'Approved', 
+     'AUTH123456', 'REF-PAY-001', 
+     CONVERT(varbinary(512), '1234-XXXX-XXXX-5678'),
+     'Donación para proyecto Parque Urbano', 'N/A', 
+     '2025-06-12 10:00:00', 
+     CONVERT(varbinary(512), HASHBYTES('SHA2_256', 'PAY001')), 1),
+    
+    (2, 3000.00, 3000.00, 'Completed',
+     'AUTH789012', 'REF-PAY-002',
+     CONVERT(varbinary(512), 'BANK-ACCT-XXXX'),
+     'Inversión en App Crowdfunding', 'N/A',
+     '2025-06-12 10:05:00',
+     CONVERT(varbinary(512), HASHBYTES('SHA2_256', 'PAY002')), 1),
+    
+    (1, 7000.00, 7000.00, 'Refunded',
+     'AUTH345678', 'REF-PAY-003',
+     CONVERT(varbinary(512), 'REFUND-1234'),
+     'Reembolso de investigación solar', 'N/A',
+     '2025-06-12 10:10:00',
+     CONVERT(varbinary(512), HASHBYTES('SHA2_256', 'PAY003')), 1);
+
+
+
+-- Insertar tipos de balance
+INSERT INTO [dbo].[pv_balanceTypes] (name)
+VALUES 
+    ('Crédito'),
+    ('Débito'),
+    ('Reserva');
+
+
+
+-- Insertar subtipos de transacción
+INSERT INTO [dbo].[pv_transactionSubType] (name)
+VALUES 
+    (1),
+    (2),
+    (3);
+
+
+
+-- Insertar tipos de transacción
+INSERT INTO [dbo].[pv_transactionType] (name)
+VALUES 
+    ('Ingreso'),
+    ('Egreso'),
+    ('Transferencia');
+
+
+-- Insertar transacciones en pv_transactions
+INSERT INTO [dbo].[pv_transactions] ( 
+    transactionTypeID, 
+    transactionSubtypeID, 
+    transactionAmount, 
+    transactionDate, 
+    details, 
+    iPaddress, 
+    paymentMethodsID, 
+    postTime, 
+    referenceNumber, 
+    convertedAmount, 
+    checksum, 
+    currencyID, 
+    exchangeRateID, 
+    paymentID, 
+    userID, 
+    balanceTypeID,
+    transactionHash
+)
+VALUES 
+    (1, 1, 5000.00, '2025-06-12 10:00:00', 'Donación inicial al proyecto Parque Urbano', 
+     CONVERT(varbinary(512), '192.168.1.1'), 1, '2025-06-12 10:01:00', 'REF001', 
+     5000.00, CONVERT(varbinary(512), HASHBYTES('SHA2_256', 'TXN001')), 1, 1, 1, 1, 1,
+     CONVERT(varbinary(512), 'HASH001')),
+    
+    (2, 2, 3000.00, '2025-06-12 10:05:00', 'Inversión en App Crowdfunding', 
+     CONVERT(varbinary(512), '192.168.1.2'), 2, '2025-06-12 10:06:00', 'REF002', 
+     3000.00, CONVERT(varbinary(512), HASHBYTES('SHA2_256', 'TXN002')), 1, 2, 2, 2, 2,
+     CONVERT(varbinary(512), 'HASH002')),
+    
+    (1, 3, 7000.00, '2025-06-12 10:10:00', 'Reembolso de investigación solar', 
+     CONVERT(varbinary(512), '192.168.1.3'), 1, '2025-06-12 10:11:00', 'REF003', 
+     7000.00, CONVERT(varbinary(512), HASHBYTES('SHA2_256', 'TXN003')), 1, 1, 3, 3, 1,
+     CONVERT(varbinary(512), 'HASH003'));
+
+
+
+
 -- Verificación de datos
 SELECT * FROM [dbo].[pv_accountStatus];
 SELECT * FROM [dbo].[pv_proposalType];
@@ -598,3 +709,8 @@ SELECT * FROM [dbo].[pv_questionTypes];
 SELECT * FROM [dbo].[pv_voteQuestions];
 SELECT * FROM [dbo].[pv_votes];
 SELECT * FROM [dbo].[pv_votingResult];
+SELECT * FROM [dbo].[pv_payments];
+SELECT * FROM [dbo].[pv_balanceTypes];
+SELECT * FROM [dbo].[pv_transactionSubType];
+SELECT * FROM [dbo].[pv_transactionType];
+SELECT * FROM [dbo].[pv_transactions];

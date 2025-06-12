@@ -28,7 +28,8 @@ module.exports.reviewProposal = async (event) => {
       body: JSON.stringify({
         success: result.success,
         returnValue: result.returnValue,
-        message: 'Propuesta revisada exitosamente'
+        status: result.status,
+        message: result.status === 'Aprobada' ? 'Propuesta revisada y aprobada exitosamente' : 'Propuesta revisada'
       })
     };
   } catch (err) {

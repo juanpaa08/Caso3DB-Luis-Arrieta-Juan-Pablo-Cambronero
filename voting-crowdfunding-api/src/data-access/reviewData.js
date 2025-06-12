@@ -8,12 +8,14 @@ async function reviewProposal(reviewData) {
       .input('proposalID', sql.Int, reviewData.proposalID)
       .input('reviewerID', sql.Int, reviewData.reviewerID)
       .input('validationResult', sql.NVarChar(255), reviewData.validationResult)
-      .input('aiPayload', sql.NVarChar(sql.MAX), reviewData.aiPayload);
+      .input('aiPayload', sql.NVarChar(sql.MAX), reviewData.aiPayload || null)
+      .output('Status', sql.NVarChar(50));
 
     const result = await request.execute('revisarPropuesta');
     return {
       success: result.returnValue === 0,
-      returnValue: result.returnValue
+      returnValue: result.returnValue,
+      status: result.output.Status
     };
   } catch (err) {
     throw new Error(`Error al llamar a revisarPropuesta: ${err.message}`);
