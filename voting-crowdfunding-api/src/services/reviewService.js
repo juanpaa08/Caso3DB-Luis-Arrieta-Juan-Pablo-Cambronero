@@ -19,9 +19,7 @@ async function reviewProposalService(reviewObj, token) {
     });
 
     return {
-      success: result.success,
-      returnValue: result.returnValue,
-      status: result.status
+      success: result.success
     };
   } catch (err) {
     throw new Error(`Error en servicio de revisión: ${err.message}`);

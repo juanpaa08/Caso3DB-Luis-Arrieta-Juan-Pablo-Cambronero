@@ -10,7 +10,7 @@ module.exports.reviewProposal = async (event) => {
     const reviewObj = {
       proposalID: parseInt(proposalID),
       reviewerID: body.reviewerID || 1,
-      validationResult: body.validationResult || 'Approved',
+      validationResult: body.validationResult || 'aprobado',
       aiPayload: body.aiPayload || null
     };
 
@@ -27,9 +27,7 @@ module.exports.reviewProposal = async (event) => {
       statusCode: 200,
       body: JSON.stringify({
         success: result.success,
-        returnValue: result.returnValue,
-        status: result.status,
-        message: result.status === 'Aprobada' ? 'Propuesta revisada y aprobada exitosamente' : 'Propuesta revisada'
+        message: 'Propuesta revisada exitosamente'
       })
     };
   } catch (err) {

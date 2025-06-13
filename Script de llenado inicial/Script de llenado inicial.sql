@@ -743,6 +743,26 @@ AND col_name(parent_object_id, parent_column_id) = 'createdAt';
 
 
 
+INSERT INTO [dbo].[pv_proposalValidation] (proposalID, proposalRequirementID, result, message, validationDate, automaticSystem, technicalDetails)
+VALUES 
+    (1, 1, 1, N'Validación inicial aprobada por usuario 1', '2025-17-06 14:00:00', 0, N'Validación manual - Revisión técnica completada'),
+    (2, 1, 1, N'Validación por usuario 2: aprobado', '2025-17-06 14:05:00', 0, N'Chequeo de requisitos completado - Manual'),
+    (3, 1, 0, N'Validación por usuario 3: rechazado', '2025-17-06 14:10:00', 0, N'Falta documentación técnica - Revisión manual'),
+    (4, 1, 1, N'Validación por usuario 4: aprobado', '2025-17-06 14:15:00', 1, N'Payload procesado: Análisis IA - 2025-06-13 14:15:00'),
+    (5, 1, 0, N'Validación por usuario 5: rechazado', '2025-17-06 14:20:00', 0, N'Presupuesto insuficiente - Revisión manual'),
+    (6, 1, 1, N'Validación por usuario 6: aprobado', '2025-17-06 14:25:00', 0, N'Validación manual - Aprobado por comité'),
+    (7, 1, 1, N'Validación por usuario 7: aprobado', '2025-17-06 14:30:00', 1, N'Payload procesado: Análisis IA - 2025-06-13 14:30:00'),
+    (8, 1, 0, N'Validación por usuario 8: rechazado', '2025-17-06 14:35:00', 0, N'Falta plan de ejecución - Revisión manual'),
+    (9, 1, 1, N'Validación por usuario 9: aprobado', '2025-17-06 14:40:00', 0, N'Validación manual - Aprobado por equipo'),
+    (10, 1, 1, N'Validación por usuario 10: aprobado', '2025-17-06 14:45:00', 1, N'Payload procesado: Análisis IA - 2025-06-13 14:45:00'),
+    (11, 1, 0, N'Validación por usuario 11: rechazado', '2025-17-06 14:50:00', 0, N'Incumplimiento de cronograma - Revisión manual'),
+    (12, 1, 1, N'Validación por usuario 12: aprobado', '2025-17-06 14:55:00', 0, N'Validación manual - Aprobado por revisión'),
+    (13, 1, 1, N'Validación por usuario 13: aprobado', '2025-17-06 15:00:00', 1, N'Payload procesado: Análisis IA - 2025-06-13 15:00:00'),
+    (14, 1, 0, N'Validación por usuario 14: rechazado', '2025-17-06 15:05:00', 0, N'Falta aprobación municipal - Revisión manual'),
+    (15, 1, 1, N'Validación por usuario 15: aprobado', '2025-17-06 15:10:00', 0, N'Validación manual - Aprobado por equipo');
+
+
+
 -- Verificación de datos
 SELECT * FROM [dbo].[pv_accountStatus];
 SELECT * FROM [dbo].[pv_proposalType];
@@ -794,3 +814,4 @@ SELECT * FROM [dbo].[pv_transactionSubType];
 SELECT * FROM [dbo].[pv_transactionType];
 SELECT * FROM [dbo].[pv_transactions];
 SELECT * FROM [dbo].[pv_proposalCore];
+SELECT * FROM [dbo].[pv_proposalValidation];

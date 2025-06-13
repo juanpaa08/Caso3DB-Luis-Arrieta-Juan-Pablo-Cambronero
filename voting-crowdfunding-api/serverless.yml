@@ -20,6 +20,7 @@ functions:
           method: post
           cors: true
 
+
   reviewProposal:
     handler: src/handlers/review.reviewProposal
     events:
