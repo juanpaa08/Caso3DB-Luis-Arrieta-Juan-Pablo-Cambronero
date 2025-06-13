@@ -713,10 +713,35 @@ ADD CONSTRAINT DF_pv_proposalComment_publishDate
 DEFAULT GETDATE() FOR publishDate;
 
 
+ALTER TABLE pv_votes
+ADD CONSTRAINT DF_pv_votes_voteDate
+DEFAULT GETDATE() FOR voteDate;
+
+
+ALTER TABLE pv_workflowLogs
+ADD CONSTRAINT DF_pv_workflowLogs_createdAt
+DEFAULT GETDATE() FOR createdAt;
+
+
 USE Caso3DB;
+
 SELECT COLUMN_NAME, DATA_TYPE, IS_NULLABLE, COLUMN_DEFAULT
 FROM INFORMATION_SCHEMA.COLUMNS
 WHERE TABLE_NAME = 'pv_proposalComment' AND COLUMN_NAME = 'publishDate';
+
+
+SELECT name, definition
+FROM sys.default_constraints
+WHERE parent_object_id = OBJECT_ID('pv_votes')
+AND col_name(parent_object_id, parent_column_id) = 'voteDate';
+
+
+SELECT name, definition
+FROM sys.default_constraints
+WHERE parent_object_id = OBJECT_ID('pv_workflowLogs')
+AND col_name(parent_object_id, parent_column_id) = 'createdAt';
+
+
 
 -- Verificación de datos
 SELECT * FROM [dbo].[pv_accountStatus];
@@ -769,5 +794,3 @@ SELECT * FROM [dbo].[pv_transactionSubType];
 SELECT * FROM [dbo].[pv_transactionType];
 SELECT * FROM [dbo].[pv_transactions];
 SELECT * FROM [dbo].[pv_proposalCore];
-
-SELECT * FROM pv_proposalComment WHERE proposalID = 1;

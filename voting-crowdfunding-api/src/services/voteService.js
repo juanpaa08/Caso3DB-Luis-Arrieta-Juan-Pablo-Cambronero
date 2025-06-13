@@ -1,0 +1,79 @@
+const CryptoJS = require('crypto-js');
+const { getUserById, getVotingById, hasVoted, recordVote, logWorkflow } = require('../data-access/voteData');
+const { pv_cryptographicKeys } = require('../models/associations');
+
+async function vote({ userID, votingID, proposalID, decision }) {
+  console.log('Voting data from getVotingById:', await getVotingById(votingID));
+  const user = await getUserById(userID);
+  if (!user) {
+    const err = new Error('Usuario no autorizado o inactivo');
+    err.status = 403;
+    throw err;
+  }
+
+  const voting = await getVotingById(votingID);
+  console.log('Voting object:', voting);
+  if (!voting || !voting.votingCore || voting.votingStatusID !== 1) {
+    const err = new Error('Votación no disponible');
+    err.status = 400;
+    throw err;
+  }
+
+  if (user.accountStatusID !== 1) {
+    const err = new Error('Usuario no activo');
+    err.status = 403;
+    throw err;
+  }
+
+  const now = new Date();
+  if (now < voting.votingCore.startDate || now > voting.votingCore.endDate) {
+    const err = new Error('Votación fuera de rango');
+    err.status = 400;
+    throw err;
+  }
+
+
+    // Generar voterHash único
+  const voterHash = CryptoJS.SHA256(`${user.identityHash}-${votingID}`).toString();
+
+
+
+  // Usar identityHash como voterHash
+  if (await hasVoted(user.identityHash, votingID, proposalID)) {
+    console.log('User has already voted');
+    const err = new Error('Usuario ya votó');
+    err.status = 400;
+    throw err;
+  }
+
+  const key = await pv_cryptographicKeys.findOne({ where: { userID, keyType: 1 } });
+  if (!key) {
+    const err = new Error('Clave pública no encontrada');
+    err.status = 500;
+    throw err;
+  }
+
+  const encryptedVote = CryptoJS.AES.encrypt(decision, key.keyValue.toString('utf8')).toString();
+
+  const voteData = {
+    votingID,
+    proposalID,
+    projectID: voting.projectID,
+    questionID: 1,
+    optionID: decision === 'Sí' ? 1 : 2,
+    customValue: encryptedVote,
+    voterHash: user.identityHash,
+    prevHash: Buffer.from('PREV_HASH_' + userID),
+    criptographicKey: key.cryptographicKeyID,
+    tokenValue: Buffer.from('TOKEN_' + userID)
+    // No incluir voteDate ni tokenUsedAt
+  };
+  console.log('voteData:', voteData); // Agregar log para depuración
+  const vote = await recordVote(voteData);
+
+  await logWorkflow(userID, votingID, 'Voto registrado', 'Voto procesado exitosamente');
+
+  return { voteID: vote.voteID };
+}
+
+module.exports = { vote };

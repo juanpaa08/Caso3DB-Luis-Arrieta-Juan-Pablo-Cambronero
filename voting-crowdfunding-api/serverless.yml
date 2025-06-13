@@ -7,6 +7,7 @@ provider:
   region: us-east-1
   environment:
     NODE_ENV: local
+    MFA_TOKEN: ${.env:MFA_TOKEN}
   memorySize: 512
   timeout: 30
 
@@ -35,27 +36,20 @@ functions:
           method: post
           cors: true
 
-  vote:
-    handler: src/handler.vote
-    events:
-      - http:
-          path: /vote
-          method: get
-          cors: true
-
-  comment:
-    handler: src/handler.comment
-    events:
-      - http:
-          path: /comment
-          method: get
-          cors: true
 
   comentar:
     handler: src/handler.comentar
     events:
       - http:
           path: proposals/{id}/comment
+          method: post
+          cors: true
+
+  votar:
+    handler: src/handler.votar
+    events:
+      - http:
+          path: proposals/{proposalID}/vote
           method: post
           cors: true
 

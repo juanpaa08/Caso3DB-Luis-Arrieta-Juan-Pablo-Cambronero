@@ -1,46 +1,10 @@
-const ProposalType        = require('./models/proposalType');
-const Currency            = require('./models/currency');
 const { comentarPropuesta } = require('./services/commentService');
+const { vote } = require('./services/voteService');
 
-module.exports.vote = async (event) => {
-  try {
-    const proposalTypes = await ProposalType.findAll();
-    return {
-      statusCode: 200,
-      body: JSON.stringify({
-        success: true,
-        data: proposalTypes.map(pt => pt.toJSON())
-      })
-    };
-  } catch (err) {
-    return {
-      statusCode: 500,
-      body: JSON.stringify({ success: false, error: err.message })
-    };
-  }
-};
-
-module.exports.comment = async (event) => {
-  try {
-    const currencies = await Currency.findAll();
-    return {
-      statusCode: 200,
-      body: JSON.stringify({
-        success: true,
-        data: currencies.map(c => c.toJSON())
-      })
-    };
-  } catch (err) {
-    return {
-      statusCode: 500,
-      body: JSON.stringify({ success: false, error: err.message })
-    };
-  }
-};
 
 module.exports.comentar = async (event) => {
   try {
-    const userID     = event.requestContext?.authorizer?.principalId || 123;
+    const userID = event.requestContext?.authorizer?.principalId || 123;
     const proposalID = parseInt(event.pathParameters.id, 10);
     const { content, hasSensitiveContent } = JSON.parse(event.body);
 
@@ -63,6 +27,36 @@ module.exports.comentar = async (event) => {
     return {
       statusCode: err.status || 500,
       body: JSON.stringify({ error: err.message || 'Error inesperado' })
+    };
+  }
+};
+
+module.exports.votar = async (event) => {
+  try {
+    // Obtener userID y convertir a número, usar 123 como fallback
+    const userID = parseInt(event.requestContext?.authorizer?.principalId) || 1;
+    if (isNaN(userID)) {
+      throw new Error('ID de usuario no válido').status = 400;
+    }
+
+    const { votingID, proposalID, decision } = JSON.parse(event.body);
+
+    const result = await vote({ userID, votingID, proposalID, decision });
+
+    return {
+      statusCode: 201,
+      body: JSON.stringify({
+        message: 'Voto registrado exitosamente',
+        voteID: result.voteID
+      }),
+      headers: { 'Access-Control-Allow-Origin': '*' }
+    };
+  } catch (err) {
+    console.error('ERROR EN VOTAR:', err);
+    return {
+      statusCode: err.status || 500,
+      body: JSON.stringify({ error: err.message || 'Error inesperado' }),
+      headers: { 'Access-Control-Allow-Origin': '*' }
     };
   }
 };
