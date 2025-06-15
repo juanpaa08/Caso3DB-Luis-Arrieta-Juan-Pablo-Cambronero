@@ -1173,6 +1173,7 @@ SELECT * FROM [dbo].[pv_groupTypes];
 SELECT * FROM [dbo].[pv_groups];
 SELECT * FROM [dbo].[pv_propposals];
 SELECT * FROM [dbo].[pv_proposalTargetGroups];
+SELECT * FROM [dbo].[pv_proposalType];
 SELECT * FROM [dbo].[pv_projectStatuses];
 SELECT * FROM [dbo].[pv_projects];
 SELECT * FROM [dbo].[pv_projectMilestones];
@@ -1226,4 +1227,132 @@ GO
 ALTER TABLE dbo.pv_cryptographicKeys
 ADD keyGUID UNIQUEIDENTIFIER NULL;
 GO
-
+
+
+-- Campos a agregar en tablas anteriores para dashboard de consulta de si la propuesta es de tipo emprendimiento o crowdfunding
+
+
+USE [Caso3DB];
+GO
+
+UPDATE [dbo].[pv_projects]
+SET title = 'Negocio sostenible'
+WHERE projectID = 5;
+GO
+
+
+UPDATE [dbo].[pv_projectMilestones]
+SET actualCloseDate = '2025-15-06'
+WHERE projectMilestoneID = 1;
+GO
+
+UPDATE [dbo].[pv_projectMilestones]
+SET actualCloseDate = '2025-14-06'
+WHERE projectMilestoneID = 2;
+GO
+
+UPDATE [dbo].[pv_projectMilestones]
+SET actualCloseDate = '2025-13-06'
+WHERE projectMilestoneID = 3;
+GO
+
+USE [Caso3DB];
+GO
+
+-- Insertar nuevos hitos para projets con ID 3 y ID 4
+INSERT INTO [dbo].[pv_projectMilestones] 
+    (projectID, title, description, assignedBudget, currencyCode, startDate, dueDate, actualCloseDate, createdAt, updatedAt, expectedDuration, checksum, projectStatusID)
+VALUES 
+    -- Para projectID 3: un hito con fecha de ejecución ya concluida (por ejemplo, ayer)
+    (3, 'Revisión Final', 'Cierre del hito de análisis final', 7000.00, 'USD', GETDATE(), GETDATE(), DATEADD(day, -1, GETDATE()), '2025-06-10 09:00:00', '2025-06-10 09:20:00', 15, CONVERT(varbinary(512), 'CHK_M4'), 1),
+    
+    -- Para projectID 4: hito de implementación ejecutado (por ejemplo, hace 2 días)
+    (4, 'Implementación Piloto', 'Desarrollo e implementación de la solución en fase piloto', 12000.00, 'USD', GETDATE(), GETDATE(), DATEADD(day, -2, GETDATE()), '2025-06-10 09:00:00', '2025-06-10 09:20:00', 30, CONVERT(varbinary(512), 'CHK_M5'), 1);
+GO
+
+
+INSERT INTO [dbo].[pv_projectMilestones] 
+    (projectID, title, description, assignedBudget, currencyCode, startDate, dueDate, actualCloseDate, createdAt, updatedAt, expectedDuration, checksum, projectStatusID)
+VALUES 
+    (
+      5,                                  -- projectID = 5
+      'Desarrollo Piloto',                -- Título del hito
+      'Implementación y pruebas iniciales del proyecto de IA Educativa',  -- Descripción del hito
+      15000.00,                           -- Monto asignado para este hito
+      'USD',                              -- Código de la moneda
+      GETDATE(),                          -- Fecha de inicio (puedes ajustar según necesidad)
+      GETDATE(),                          -- Fecha de vencimiento
+      DATEADD(day, -4, GETDATE()),        -- actualCloseDate: simula ejecución hace 4 días
+      '2025-06-10 09:00:00',               -- createdAt (valor de ejemplo; ajústalo si lo requieres)
+      '2025-06-10 09:20:00',               -- updatedAt (valor de ejemplo)
+      60,                                 -- Duración esperada en días
+      CONVERT(varbinary(512), 'CHK_M7'),   -- Checksum para el hito (valor personalizado)
+      1                                   -- projectStatusID, por ejemplo 1 para activo
+    );
+GO
+
+
+INSERT INTO [dbo].[pv_proposalType] (propposalTypeID, name, description, applicationLevel, category, status, minimumRequirements, contentTemplate, version, lastUpdate)
+VALUES 
+    (6, 'Crowdfunding', 'Propuestas financiadas a través de inversión colectiva', 'Nacional', 'Economía', 'Activo', 'Campaña de financiación, plan de marketing y estrategia de comunicación', 'Plantilla para campañas de crowdfunding', 1.0, '2025-06-10 11:38:00');
+
+
+ALTER TABLE [dbo].[pv_propposals]
+ADD projectID INT NULL;
+
+
+ALTER TABLE [dbo].[pv_propposals]
+WITH CHECK ADD CONSTRAINT FK_pv_propposals_pv_projects FOREIGN KEY (projectID)
+REFERENCES [dbo].[pv_projects](projectID);
+GO
+ALTER TABLE [dbo].[pv_propposals] CHECK CONSTRAINT FK_pv_propposals_pv_projects;
+
+
+UPDATE [dbo].[pv_propposals]
+SET proposalTypeID = 6
+WHERE name LIKE '%Crowdfunding%';
+
+UPDATE [dbo].[pv_propposals]
+SET proposalTypeID = 6
+WHERE name LIKE '%Drone%';
+
+UPDATE [dbo].[pv_propposals]
+SET name = 'Plataforma de Crowfunding para videojuego independiente'
+WHERE name LIKE '%Drone%';
+
+
+
+UPDATE [dbo].[pv_propposals]
+SET projectID = 1
+WHERE proposalTypeID = 1;
+
+UPDATE [dbo].[pv_propposals]
+SET projectID = 5
+WHERE proposalTypeID = 2;
+
+UPDATE [dbo].[pv_propposals]
+SET projectID = 3
+WHERE proposalTypeID = 3;
+
+
+UPDATE [dbo].[pv_propposals]
+SET projectID = 4
+WHERE proposalTypeID = 4;
+
+UPDATE [dbo].[pv_propposals]
+SET projectID = 5
+WHERE proposalTypeID = 5;
+
+UPDATE [dbo].[pv_propposals]
+SET projectID = 2
+WHERE proposalTypeID = 6;
+
+
+
+
+
+
+
+
+
+
