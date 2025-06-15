@@ -763,6 +763,262 @@ VALUES
 
 
 
+
+-- Insertar datos en pv_voteQuestions para dashboard de consulta
+
+-- Volver a llenar pv_voteQuestions
+
+-- Deshabilitar las restricciones de clave foránea temporalmente
+ALTER TABLE [dbo].[pv_votes] NOCHECK CONSTRAINT ALL; -- Ajusta el nombre de la tabla si es diferente
+ALTER TABLE [dbo].[pv_voteQuestionsOptions] NOCHECK CONSTRAINT ALL; -- Ajusta el nombre de la tabla si es diferente
+
+-- Eliminar todos los datos
+DELETE FROM [dbo].[pv_voteQuestions];
+
+-- Reiniciar la identidad (si voteQuestionID es autoincremental)
+DBCC CHECKIDENT ('[dbo].[pv_voteQuestions]', RESEED, 0);
+
+-- Insertar nuevos datos
+INSERT INTO [dbo].[pv_voteQuestions] (voteID, questionText, questionTypeID, maxSelections, isRequired, createdAt, updatedAt)
+VALUES 
+    (1, N'¿Aprueba la construcción del parque?', 1, 1, 1, GETDATE(), NULL),
+    (1, N'¿Qué nivel de apoyo tiene la app?', 2, 2, 0, GETDATE(), GETDATE()),
+    (2, N'¿Aprueba la investigación solar?', 1, 1, 1, GETDATE(), NULL),
+    (3, N'¿Apoya el festival cultural?', 1, 1, 1, GETDATE(), NULL),
+    (4, N'¿Aprueba el plan de reforestación?', 1, 1, 1, GETDATE(), NULL),
+    (5, N'¿Soporta la iniciativa educativa?', 2, 2, 0, GETDATE(), NULL);
+
+
+-- Volver a habilitar las restricciones de clave foránea
+ALTER TABLE [dbo].[pv_votes] WITH CHECK CHECK CONSTRAINT ALL;
+ALTER TABLE [dbo].[pv_voteQuestionsOptions] WITH CHECK CHECK CONSTRAINT ALL;
+
+-- Volver a llenar pv_voteQuestionsOptions
+
+-- Deshabilitar las restricciones de clave foránea (si aplica)
+ALTER TABLE [dbo].[pv_votes] NOCHECK CONSTRAINT ALL; -- Si pv_votes referencia voteQuestionOptionsID
+
+-- Eliminar todos los datos
+DELETE FROM [dbo].[pv_voteQuestionsOptions];
+
+-- Reiniciar la identidad (si voteQuestionOptionsID es autoincremental)
+DBCC CHECKIDENT ('[dbo].[pv_voteQuestionsOptions]', RESEED, 0);
+
+-- Insertar nuevos datos
+INSERT INTO [dbo].[pv_voteQuestionsOptions] (questionID, label, optionURL, value, dataTypeID, orderIndex, isActive, createdAt)
+VALUES 
+    (1, N'A favor', NULL, N'Sí', 1, 1, 1, GETDATE()),
+    (1, N'En contra', NULL, N'No', 1, 2, 1, GETDATE()),
+    (2, N'Abstención', N'https://example.com/abstencion', N'Abst', 2, 1, 1, GETDATE()),
+    (3, N'A favor', NULL, N'Sí', 1, 1, 1, GETDATE()),
+    (3, N'En contra', NULL, N'No', 1, 2, 1, GETDATE()),
+    (4, N'A favor', NULL, N'Sí', 1, 1, 1, GETDATE()),
+    (4, N'En contra', NULL, N'No', 1, 2, 1, GETDATE()),
+    (5, N'Abstención', N'https://example.com/abstencion', N'Abst', 2, 1, 1, GETDATE());
+
+-- Volver a habilitar las restricciones
+ALTER TABLE [dbo].[pv_votes] WITH CHECK CHECK CONSTRAINT ALL;
+
+
+-- Volver a llenar pv_votes
+
+-- Deshabilitar las restricciones de clave foránea temporalmente
+ALTER TABLE [dbo].[pv_publicVotes] NOCHECK CONSTRAINT [FK_pv_publicVotes_pv_votes];
+ALTER TABLE [dbo].[pv_voteAllowedGroups] NOCHECK CONSTRAINT [FK_pv_voteAllowedGroups_pv_votes];
+ALTER TABLE [dbo].[pv_voteHash] NOCHECK CONSTRAINT [FK_pv_voteHash_pv_votes];
+ALTER TABLE [dbo].[pv_voteQuestions] NOCHECK CONSTRAINT [FK_pv_voteQuestions_pv_votes];
+
+-- Eliminar todos los datos de pv_votes
+DELETE FROM [dbo].[pv_votes];
+
+-- Reiniciar la identidad (si voteID es autoincremental)
+DBCC CHECKIDENT ('[dbo].[pv_votes]', RESEED, 0);
+
+
+-- Procedimiento para insertar votos (50 votos) con votingID de 1 a 8, priorizando 4-8
+CREATE OR ALTER PROCEDURE [dbo].[sp_SeedVotes]
+AS
+BEGIN
+    SET NOCOUNT ON;
+    DECLARE @i INT = 1;
+    WHILE @i <= 50
+    BEGIN
+        INSERT INTO [dbo].[pv_votes] (votingID, proposalID, projectID, questionID, optionID, customValue, voterHash, prevHash, criptographicKey, voteDate, tokenUsedAt, tokenValue)
+        VALUES 
+            (CASE 
+                WHEN @i <= 10 THEN 8  -- 10 votos para votingID 8 (más reciente)
+                WHEN @i <= 18 THEN 7  -- 8 votos para votingID 7
+                WHEN @i <= 25 THEN 6  -- 7 votos para votingID 6
+                WHEN @i <= 32 THEN 5  -- 7 votos para votingID 5
+                WHEN @i <= 39 THEN 4  -- 7 votos para votingID 4
+                WHEN @i <= 43 THEN 3  -- 4 votos para votingID 3
+                WHEN @i <= 47 THEN 2  -- 4 votos para votingID 2
+                ELSE 1                -- 3 votos para votingID 1
+             END,
+             CASE 
+                WHEN @i <= 10 THEN 8
+                WHEN @i <= 18 THEN 7
+                WHEN @i <= 25 THEN 6
+                WHEN @i <= 32 THEN 5
+                WHEN @i <= 39 THEN 4
+                WHEN @i <= 43 THEN 3
+                WHEN @i <= 47 THEN 2
+                ELSE 1
+             END,
+             CASE WHEN @i <= 10 THEN 2 WHEN @i <= 18 THEN 2 WHEN @i <= 25 THEN 2 WHEN @i <= 32 THEN 2 WHEN @i <= 39 THEN 2 WHEN @i <= 43 THEN 1 WHEN @i <= 47 THEN 1 ELSE 1 END,
+             ((@i - 1) % 5) + 1, -- Distribuir questionID de 1 a 5
+             CASE WHEN @i % 3 = 0 THEN 1 WHEN @i % 3 = 1 THEN 2 ELSE 3 END,
+             CASE WHEN @i % 2 = 0 THEN 'A favor' ELSE 'En contra' END,
+             CONVERT(varbinary(250), 'VOTE_HASH_' + RIGHT('00' + CAST(@i AS NVARCHAR(3)), 3)),
+             CONVERT(varbinary(512), 'PREV_HASH_' + RIGHT('00' + CAST(@i AS NVARCHAR(3)), 3)),
+             CASE WHEN @i % 2 = 0 THEN 1 ELSE 2 END,
+             DATEADD(minute, -@i * 10, '2025-06-10 12:04:00'),
+             DATEADD(minute, -@i * 10, '2025-06-10 12:04:00'),
+             CONVERT(varbinary(512), 'TOKEN_' + RIGHT('00' + CAST(@i AS NVARCHAR(3)), 3)));
+        SET @i = @i + 1;
+    END
+END;
+GO
+
+EXEC [dbo].[sp_SeedVotes];
+
+-- Volver a habilitar las restricciones de clave foránea
+ALTER TABLE [dbo].[pv_publicVotes] WITH CHECK CHECK CONSTRAINT [FK_pv_publicVotes_pv_votes];
+ALTER TABLE [dbo].[pv_voteAllowedGroups] WITH CHECK CHECK CONSTRAINT [FK_pv_voteAllowedGroups_pv_votes];
+ALTER TABLE [dbo].[pv_voteHash] WITH CHECK CHECK CONSTRAINT [FK_pv_voteHash_pv_votes];
+ALTER TABLE [dbo].[pv_voteQuestions] WITH CHECK CHECK CONSTRAINT [FK_pv_voteQuestions_pv_votes];
+
+-- Actualizar pv_votings.createdAt con incremento diario
+UPDATE [dbo].[pv_votings]
+SET createdAt = DATEADD(day, votingID - 1, '2025-06-10 12:00:00.000')
+WHERE votingID BETWEEN 1 AND 8;
+
+
+UPDATE pv_votingCore SET startDate = CAST(GETDATE() AS DATE) WHERE votingCoreID = 1;
+UPDATE pv_votingCore SET startDate = DATEADD(DAY, 1, CAST(GETDATE() AS DATE)) WHERE votingCoreID = 2;
+UPDATE pv_votingCore SET startDate = DATEADD(DAY, 2, CAST(GETDATE() AS DATE)) WHERE votingCoreID = 3;
+UPDATE pv_votingCore SET startDate = DATEADD(DAY, 3, CAST(GETDATE() AS DATE)) WHERE votingCoreID = 4;
+UPDATE pv_votingCore SET startDate = DATEADD(DAY, 4, CAST(GETDATE() AS DATE)) WHERE votingCoreID = 5;
+UPDATE pv_votingCore SET startDate = DATEADD(DAY, 5, CAST(GETDATE() AS DATE)) WHERE votingCoreID = 6;
+UPDATE pv_votingCore SET startDate = DATEADD(DAY, 6, CAST(GETDATE() AS DATE)) WHERE votingCoreID = 7;
+UPDATE pv_votingCore SET startDate = DATEADD(DAY, 7, CAST(GETDATE() AS DATE)) WHERE votingCoreID = 8;
+-- ... Repite hasta el ID 8
+
+
+
+USE [Caso3DB];
+GO
+
+
+-- Crear tabla pata mapear votaciones de forma anonima para el dashboard de consulta del top 5
+
+CREATE TABLE dbo.pv_voteMapping (
+    voterHash VARBINARY(250) PRIMARY KEY,
+    -- Opcionalmente, si ya procesaste la segmentación:
+    edadSegment VARCHAR(20),
+    sexoSegment VARCHAR(20),
+    regionSegment VARCHAR(50)
+);
+
+
+-- Ver que voterHash hay en pv_votes
+SELECT DISTINCT voterHash
+FROM dbo.pv_votes;
+
+
+-- Insertar datos en la tabla de pv_voteMapping
+INSERT INTO dbo.pv_voteMapping (voterHash, edadSegment, sexoSegment, regionSegment)
+VALUES 
+(0x56004F00540045005F0048004100530048005F00300030003100, '35-44', 'Masculino', 'San José'),
+(0x56004F00540045005F0048004100530048005F00300030003200, '25-34', 'Femenino', 'Alajuela'),
+(0x56004F00540045005F0048004100530048005F00300030003300, '35-44', 'Masculino', 'Cartago'),
+(0x56004F00540045005F0048004100530048005F00300030003400, '45-54', 'Femenino', 'Heredia'),
+(0x56004F00540045005F0048004100530048005F00300030003500, '25-34', 'Femenino', 'San José'),
+(0x56004F00540045005F0048004100530048005F00300030003600, '35-44', 'Masculino', 'Alajuela'),
+(0x56004F00540045005F0048004100530048005F00300030003700, '45-54', 'Masculino', 'Cartago'),
+(0x56004F00540045005F0048004100530048005F00300030003800, '25-34', 'Femenino', 'Heredia'),
+(0x56004F00540045005F0048004100530048005F00300030003900, '35-44', 'Masculino', 'San José'),
+(0x56004F00540045005F0048004100530048005F00300031003000, '45-54', 'Femenino', 'Alajuela'),
+(0x56004F00540045005F0048004100530048005F00300031003100, '25-34', 'Masculino', 'Cartago'),
+(0x56004F00540045005F0048004100530048005F00300031003200, '35-44', 'Femenino', 'Heredia'),
+(0x56004F00540045005F0048004100530048005F00300031003300, '45-54', 'Masculino', 'San José'),
+(0x56004F00540045005F0048004100530048005F00300031003400, '25-34', 'Femenino', 'Alajuela'),
+(0x56004F00540045005F0048004100530048005F00300031003500, '35-44', 'Masculino', 'Cartago'),
+(0x56004F00540045005F0048004100530048005F00300031003600, '45-54', 'Femenino', 'Heredia'),
+(0x56004F00540045005F0048004100530048005F00300031003700, '25-34', 'Masculino', 'San José'),
+(0x56004F00540045005F0048004100530048005F00300031003800, '35-44', 'Femenino', 'Alajuela'),
+(0x56004F00540045005F0048004100530048005F00300031003900, '45-54', 'Masculino', 'Cartago'),
+(0x56004F00540045005F0048004100530048005F00300032003000, '25-34', 'Femenino', 'Heredia'),
+(0x56004F00540045005F0048004100530048005F00300032003100, '35-44', 'Masculino', 'San José'),
+(0x56004F00540045005F0048004100530048005F00300032003200, '45-54', 'Femenino', 'Alajuela'),
+(0x56004F00540045005F0048004100530048005F00300032003300, '25-34', 'Masculino', 'Cartago'),
+(0x56004F00540045005F0048004100530048005F00300032003400, '35-44', 'Femenino', 'Heredia'),
+(0x56004F00540045005F0048004100530048005F00300032003500, '45-54', 'Masculino', 'San José'),
+(0x56004F00540045005F0048004100530048005F00300032003600, '25-34', 'Femenino', 'Alajuela'),
+(0x56004F00540045005F0048004100530048005F00300032003700, '35-44', 'Masculino', 'Cartago'),
+(0x56004F00540045005F0048004100530048005F00300032003800, '45-54', 'Femenino', 'Heredia'),
+(0x56004F00540045005F0048004100530048005F00300032003900, '25-34', 'Masculino', 'San José'),
+(0x56004F00540045005F0048004100530048005F00300033003000, '35-44', 'Femenino', 'Alajuela'),
+(0x56004F00540045005F0048004100530048005F00300033003100, '45-54', 'Masculino', 'Cartago'),
+(0x56004F00540045005F0048004100530048005F00300033003200, '25-34', 'Femenino', 'Heredia'),
+(0x56004F00540045005F0048004100530048005F00300033003300, '35-44', 'Masculino', 'San José'),
+(0x56004F00540045005F0048004100530048005F00300033003400, '45-54', 'Femenino', 'Alajuela'),
+(0x56004F00540045005F0048004100530048005F00300033003500, '25-34', 'Masculino', 'Cartago'),
+(0x56004F00540045005F0048004100530048005F00300033003600, '35-44', 'Femenino', 'Heredia'),
+(0x56004F00540045005F0048004100530048005F00300033003700, '45-54', 'Masculino', 'San José'),
+(0x56004F00540045005F0048004100530048005F00300033003800, '25-34', 'Femenino', 'Alajuela'),
+(0x56004F00540045005F0048004100530048005F00300033003900, '35-44', 'Masculino', 'Cartago'),
+(0x56004F00540045005F0048004100530048005F00300034003000, '45-54', 'Femenino', 'Heredia'),
+(0x56004F00540045005F0048004100530048005F00300034003100, '25-34', 'Masculino', 'San José'),
+(0x56004F00540045005F0048004100530048005F00300034003200, '35-44', 'Femenino', 'Alajuela'),
+(0x56004F00540045005F0048004100530048005F00300034003300, '45-54', 'Masculino', 'Cartago'),
+(0x56004F00540045005F0048004100530048005F00300034003400, '25-34', 'Femenino', 'Heredia'),
+(0x56004F00540045005F0048004100530048005F00300034003500, '35-44', 'Masculino', 'San José'),
+(0x56004F00540045005F0048004100530048005F00300034003600, '45-54', 'Femenino', 'Alajuela'),
+(0x56004F00540045005F0048004100530048005F00300034003700, '25-34', 'Masculino', 'Cartago'),
+(0x56004F00540045005F0048004100530048005F00300034003800, '35-44', 'Femenino', 'Heredia'),
+(0x56004F00540045005F0048004100530048005F00300034003900, '45-54', 'Masculino', 'San José'),
+(0x56004F00540045005F0048004100530048005F00300035003000, '25-34', 'Femenino', 'Alajuela');
+
+
+
+--Crear vista para fusionar y agrupar la información de los votos con los datos demográficos de forma anonima
+CREATE VIEW dbo.vw_VotosDemograficos AS
+-- Agregación por Edad
+SELECT
+    'Edad' AS DemographicType,
+    m.edadSegment AS Demografia,
+    COUNT(v.voteID) AS TotalVotos
+FROM dbo.pv_votes v
+INNER JOIN dbo.pv_voteMapping m
+    ON v.voterHash = m.voterHash
+GROUP BY m.edadSegment
+
+UNION ALL
+
+-- Agregación por Sexo
+SELECT
+    'Sexo' AS DemographicType,
+    m.sexoSegment AS Demografia,
+    COUNT(v.voteID) AS TotalVotos
+FROM dbo.pv_votes v
+INNER JOIN dbo.pv_voteMapping m
+    ON v.voterHash = m.voterHash
+GROUP BY m.sexoSegment
+
+UNION ALL
+
+-- Agregación por Región
+SELECT
+    'Región' AS DemographicType,
+    m.regionSegment AS Demografia,
+    COUNT(v.voteID) AS TotalVotos
+FROM dbo.pv_votes v
+INNER JOIN dbo.pv_voteMapping m
+    ON v.voterHash = m.voterHash
+GROUP BY m.regionSegment;
+
+
 -- Verificación de datos
 SELECT * FROM [dbo].[pv_accountStatus];
 SELECT * FROM [dbo].[pv_proposalType];
@@ -806,6 +1062,7 @@ SELECT * FROM [dbo].[pv_votingCoreResultTypes];
 SELECT * FROM [dbo].[pv_votingCore];
 SELECT * FROM [dbo].[pv_questionTypes];
 SELECT * FROM [dbo].[pv_voteQuestions];
+SELECT * FROM [dbo].[pv_voteQuestionsOptions];
 SELECT * FROM [dbo].[pv_votes];
 SELECT * FROM [dbo].[pv_votingResult];
 SELECT * FROM [dbo].[pv_payments];
@@ -815,3 +1072,4 @@ SELECT * FROM [dbo].[pv_transactionType];
 SELECT * FROM [dbo].[pv_transactions];
 SELECT * FROM [dbo].[pv_proposalCore];
 SELECT * FROM [dbo].[pv_proposalValidation];
+SELECT * FROM [dbo].[pv_voteMapping];
