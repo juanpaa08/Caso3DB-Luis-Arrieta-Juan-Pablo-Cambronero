@@ -1,230 +1,238 @@
 USE [Caso3DB];
 GO
 
+-- 1) Eliminar versión previa
+IF OBJECT_ID('dbo.invertir','P') IS NOT NULL
+  DROP PROCEDURE dbo.invertir;
+GO
 
-CREATE OR ALTER PROCEDURE dbo.sp_Invertir
-    @projectID        INT,
-    @userID           INT,
-    @amount           DECIMAL(18,2),
-    @paymentMethodID  INT
+-- 2) Crear el SP con THROW corregido
+CREATE PROCEDURE dbo.invertir
+  @projectID       INT,
+  @userID          INT,
+  @amount          DECIMAL(18,2),
+  @paymentMethodID INT
+WITH EXECUTE AS OWNER
 AS
 BEGIN
-    SET NOCOUNT, XACT_ABORT ON;
-    SET TRANSACTION ISOLATION LEVEL SERIALIZABLE;
+  SET NOCOUNT      ON;
+  SET XACT_ABORT   ON;
+  SET TRANSACTION ISOLATION LEVEL SERIALIZABLE;
 
-    DECLARE 
-        @approvedStatusID   INT,
-        @cryptoKeyID        INT,
-        @keyAction          NVARCHAR(20) = N'existing',
-        @totalSolicitado    DECIMAL(18,2),
-        @sumaInvertido      DECIMAL(18,2),
-        @equityPct          DECIMAL(10,2),
-        @contribID          INT,
-        @newKey             VARBINARY(32),
-        @hashKey            VARBINARY(32),
-        @keyTypeID          INT,
-        @algID              INT,
-        @mainUseID          INT,
-        @enclaveID          INT,
-        @sigID              INT;
+  DECLARE
+    @keyName        SYSNAME,
+    @cryptoKeyID    INT,
+    @openCmd        NVARCHAR(MAX),
+    @closeCmd       NVARCHAR(MAX),
+    @encryptedAmt   VARBINARY(MAX),
+    @encryptedPrev  VARBINARY(MAX),
+    @approvedStatus INT,
+    @totalSolicited DECIMAL(18,2),
+    @sumInvested    DECIMAL(18,2),
+    @equityPct      DECIMAL(10,2),
+    @contribID      INT,
+    @errMsg         NVARCHAR(200);
 
-    IF @amount <= 0
-        THROW 50018, 'El monto de inversión debe ser mayor a cero', 1;
+  -- 1) Validar monto
+  IF @amount <= 0
+  BEGIN
+    SET @errMsg = 'El monto de inversión debe ser mayor a cero.';
+    THROW 50018, @errMsg, 1;
+  END
 
-    BEGIN TRANSACTION;
-    BEGIN TRY
-        -- Estado aprobado
-        SELECT @approvedStatusID = contributionStatusID
-          FROM dbo.pv_contributionStatuses
-         WHERE LTRIM(RTRIM(name)) IN (N'Approved', N'Aprobado');
-        IF @approvedStatusID IS NULL
-            THROW 50015, 'Falta estado Approved/Aprobado', 1;
+  -- 2) Nombre de la key del usuario
+  SET @keyName = N'SK_User_' + CAST(@userID AS NVARCHAR(10));
 
-        -- Obtener o crear llave criptográfica
-        SELECT TOP 1 @cryptoKeyID = cryptographicKeyID
-          FROM dbo.pv_cryptographicKeys
-         WHERE userID = @userID
-         ORDER BY createdAt DESC;
+  -- 3) Verificar existencia física de la symmetric key
+  IF NOT EXISTS (
+    SELECT 1 FROM sys.symmetric_keys WHERE name = @keyName
+  )
+  BEGIN
+    SET @errMsg = 'No existe symmetric key ' + @keyName + '.';
+    THROW 50017, @errMsg, 1;
+  END
 
-        IF @cryptoKeyID IS NULL
-        BEGIN
-            SET @keyAction = N'created';
+  -- 4) Obtener cryptographicKeyID
+  SELECT TOP 1
+    @cryptoKeyID = cryptographicKeyID
+  FROM dbo.pv_cryptographicKeys
+  WHERE userID = @userID
+    AND status = N'Activo'
+  ORDER BY createdAt DESC;
 
-            SET @newKey  = CRYPT_GEN_RANDOM(32);
-            SET @hashKey = HASHBYTES('SHA2_256', @newKey);
+  IF @cryptoKeyID IS NULL
+  BEGIN
+    SET @errMsg = 'No hay registro activo en pv_cryptographicKeys para userID=' 
+                  + CAST(@userID AS NVARCHAR(10)) + '.';
+    THROW 50017, @errMsg, 1;
+  END
 
-            SELECT TOP 1
-                @keyTypeID = keyTypeID
-              FROM dbo.pv_keyTypes
-              ORDER BY createdAt DESC;
+  -- 5) Abrir la symmetric key dinámicamente
+  SET @openCmd = 
+    N'OPEN SYMMETRIC KEY [' + @keyName
+    + N'] DECRYPTION BY CERTIFICATE [Cert_UserKey];';
+  EXEC sp_executesql @openCmd;
 
-            SELECT TOP 1
-                @algID = algorithmID
-              FROM dbo.pv_algorithms
-              ORDER BY createdAt DESC;
+  -- 6) Cifrar amount y prevHash
+  SET @encryptedAmt  = EncryptByKey(
+    Key_GUID(@keyName),
+    CONVERT(varchar(50), @amount)
+  );
+  SET @encryptedPrev = EncryptByKey(
+    Key_GUID(@keyName),
+    HASHBYTES('SHA2_256', CONVERT(varchar(36), NEWID()))
+  );
 
-            SELECT TOP 1
-                @mainUseID = mainUseID
-              FROM dbo.pv_mainUses
-              ORDER BY createdAt DESC;
+  -- 7) Cerrar la symmetric key
+  SET @closeCmd = N'CLOSE SYMMETRIC KEY [' + @keyName + N'];';
+  EXEC sp_executesql @closeCmd;
 
-            SELECT TOP 1
-                @enclaveID = secureEnclaveID,
-                @sigID     = digitalSignatureID
-              FROM dbo.pv_secureEnclave se
-              JOIN dbo.pv_digitalSignature ds ON 1=1
-              ORDER BY se.createdAt DESC;
+  -- 8) Obtener estado “Approved”
+  SELECT @approvedStatus = contributionStatusID
+    FROM dbo.pv_contributionStatuses
+   WHERE name IN (N'Approved', N'Aprobado');
+  IF @approvedStatus IS NULL
+  BEGIN
+    SET @errMsg = 'Falta estado Approved/Aprobado.';
+    THROW 50015, @errMsg, 1;
+  END
 
-            IF @keyTypeID IS NULL OR @algID IS NULL OR @mainUseID IS NULL OR @enclaveID IS NULL OR @sigID IS NULL
-                THROW 50017, 'Faltan datos maestros para la llave', 1;
+  -- 9) Validaciones de proyecto, usuario y método de pago
+  IF NOT EXISTS (
+    SELECT 1 FROM dbo.pv_projects
+     WHERE projectID = @projectID
+       AND projectStatusID IN (1,2)
+  )
+  BEGIN
+    SET @errMsg = 'Proyecto no habilitado.';
+    THROW 50010, @errMsg, 1;
+  END
 
-            INSERT INTO dbo.pv_cryptographicKeys
-            (
-                keyType, algorithm, keyValue, createdAt, expirationDate,
-                status, mainUse, hashKey, enclaveID, digitalSignatureID, userID
-            )
-            VALUES
-            (
-                @keyTypeID,
-                @algID,
-                @newKey,
-                GETDATE(),
-                DATEADD(YEAR,1,GETDATE()),
-                N'Active',
-                @mainUseID,
-                @hashKey,
-                @enclaveID,
-                @sigID,
-                @userID
-            );
-            SET @cryptoKeyID = SCOPE_IDENTITY();
-        END
+  IF NOT EXISTS (
+    SELECT 1 FROM dbo.pv_users WHERE userID = @userID
+  )
+  BEGIN
+    SET @errMsg = 'Usuario no existe.';
+    THROW 50011, @errMsg, 1;
+  END
 
-        -- Proyecto válido
-        IF NOT EXISTS (
-            SELECT 1
-              FROM dbo.pv_projects p
-             WHERE p.projectID = @projectID
-               AND p.projectStatusID IN (1,2)
-        )
-            THROW 50010, 'Proyecto no habilitado para inversión', 1;
+  IF NOT EXISTS (
+    SELECT 1 FROM dbo.pv_paymentMethods
+     WHERE paymentMethodID = @paymentMethodID
+       AND enabled = 1
+  )
+  BEGIN
+    SET @errMsg = 'Método de pago inválido.';
+    THROW 50012, @errMsg, 1;
+  END
 
-        -- Usuario válido
-        IF NOT EXISTS (
-            SELECT 1
-              FROM dbo.pv_users u
-             WHERE u.userID = @userID
-        )
-            THROW 50011, 'Usuario no existe', 1;
+  -- 10) Cálculo de montos
+  SELECT @totalSolicited = requestedAmount
+    FROM dbo.pv_projects
+   WHERE projectID = @projectID;
 
-        -- Método de pago válido
-        IF NOT EXISTS (
-            SELECT 1
-              FROM dbo.pv_paymentMethods pm
-             WHERE pm.paymentMethodID = @paymentMethodID
-               AND pm.enabled = 1
-        )
-            THROW 50012, 'Método de pago inválido', 1;
+  SELECT @sumInvested = ISNULL(SUM(amount), 0)
+    FROM dbo.pv_crowdfundingContributions
+   WHERE projectID = @projectID
+     AND contributionStatusID = @approvedStatus;
 
-        -- Calcular montos
-        SELECT @totalSolicitado = requestedAmount
-          FROM dbo.pv_projects
-         WHERE projectID = @projectID;
-        IF @totalSolicitado IS NULL
-            THROW 50013, 'Proyecto no encontrado', 1;
+  IF @sumInvested + @amount > @totalSolicited
+  BEGIN
+    SET @errMsg = 'Inversión excede monto máximo.';
+    THROW 50014, @errMsg, 1;
+  END
 
-        SELECT @sumaInvertido = ISNULL(SUM(amount),0)
-          FROM dbo.pv_crowdfundingContributions
-         WHERE projectID = @projectID
-           AND contributionStatusID = @approvedStatusID;
+  SET @equityPct = ROUND(@amount * 100.0 / @totalSolicited, 2);
 
-        IF @sumaInvertido + @amount > @totalSolicitado
-            THROW 50014, 'Inversión excede monto máximo del proyecto', 1;
+  -- 11) Insertar la contribución
+  INSERT INTO dbo.pv_crowdfundingContributions
+  (
+    projectID, userID, contributionDate,
+    amount, encryptedAmount, currencyCode,
+    isMatchedByGob, matchedAmount, contributionStatusID,
+    description, paymentMethodID, prevHash, cryptographicKeyID
+  )
+  VALUES
+  (
+    @projectID, @userID, GETDATE(),
+    @amount, @encryptedAmt, N'CRC',
+    0, 0, @approvedStatus,
+    NULL, @paymentMethodID, @encryptedPrev, @cryptoKeyID
+  );
+  SET @contribID = SCOPE_IDENTITY();
 
-        SET @equityPct = ROUND(@amount * 100.0 / @totalSolicitado, 2);
-
-        -- Insertar contribución
-        INSERT INTO dbo.pv_crowdfundingContributions
-        (
-            projectID, userID, contributionDate, amount, currencyCode,
-            isMatchedByGob, matchedAmount, contributionStatusID,
-            description, paymentMethodID, prevHash, cryptographicKeyID
-        )
-        VALUES
-        (
-            @projectID, @userID, GETDATE(), @amount, N'CRC',
-            0, 0, @approvedStatusID,
-            NULL, @paymentMethodID,
-            HASHBYTES('SHA2_256', CONVERT(VARCHAR(36), NEWID())),
-            @cryptoKeyID
-        );
-        SET @contribID = SCOPE_IDENTITY();
-
-        -- Resultado principal
-        SELECT
-            @contribID        AS contributionID,
-            @projectID        AS projectID,
-            @userID           AS userID,
-            @amount           AS investedAmount,
-            @totalSolicitado  AS totalRequested,
-            @sumaInvertido    AS alreadyInvested,
-            @equityPct        AS equityPercent,
-            @cryptoKeyID      AS cryptoKeyID,
-            @keyAction        AS cryptoKeyAction,
-            @approvedStatusID AS statusID;
-
-        -- 12 cuotas
-        ;WITH Months AS (
-            SELECT 1 AS MesOffset
-            UNION ALL
-            SELECT MesOffset + 1 FROM Months WHERE MesOffset < 12
-        )
-        SELECT
-            @contribID                            AS contributionID,
-            DATEADD(MONTH, MesOffset, CAST(GETDATE() AS DATE)) AS dueDate,
-            ROUND(@amount/12, 2)                  AS installmentAmount
-        FROM Months
-        OPTION (MAXRECURSION 12);
-
-        -- 4 revisiones
-        SELECT
-            @contribID                            AS contributionID,
-            DATEADD(MONTH, v.ReviewOffset, CAST(GETDATE() AS DATE)) AS reviewDate,
-            v.ReviewLabel                        AS milestone
-        FROM (VALUES
-            ( 3, N'1ra Revisión'),
-            ( 6, N'2da Revisión'),
-            ( 9, N'3ra Revisión'),
-            (12, N'Revisión Final')
-        ) AS v(ReviewOffset, ReviewLabel);
-
-        COMMIT TRANSACTION;
-    END TRY
-    BEGIN CATCH
-        ROLLBACK TRANSACTION;
-        THROW;
-    END CATCH
+  -- 12) Retornar resultados
+  SELECT
+    @contribID       AS contributionID,
+    @projectID       AS projectID,
+    @userID          AS userID,
+    @amount          AS investedAmount,
+    @totalSolicited  AS totalRequested,
+    @sumInvested     AS alreadyInvested,
+    @equityPct       AS equityPercent,
+    @encryptedAmt    AS encryptedAmount,
+    @encryptedPrev   AS prevHash;
 END;
 GO
 
+--------------------------------------------------------------------------------
+-- EVIDENCIA A: compilación exitosa
+-- (Si el CREATE PROCEDURE arriba no arroja errores, compiló bien)
+--------------------------------------------------------------------------------
+
+--------------------------------------------------------------------------------
+-- EVIDENCIA B: prueba de ejecución
+--------------------------------------------------------------------------------
+EXEC dbo.invertir
+  @projectID       = 1,
+  @userID          = 151,
+  @amount          = 2468.02,
+  @paymentMethodID = 1;
+GO
+
+--------------------------------------------------------------------------------
+-- EVIDENCIA C: verificar symmetric key usada
+--------------------------------------------------------------------------------
+SELECT
+  sk.name            AS symmetricKeyName,
+  KEY_GUID(sk.name)  AS symmetricKeyGUID
+FROM sys.symmetric_keys sk
+WHERE sk.name = 'SK_User_151';
+GO
+
+--------------------------------------------------------------------------------
+-- EVIDENCIA D: verificar inserción en contributions
+--------------------------------------------------------------------------------
+SELECT TOP 1
+  crowdfundinCotributionID AS contributionID,
+  projectID,
+  userID,
+  amount,
+  encryptedAmount,
+  prevHash,
+  cryptographicKeyID
+FROM dbo.pv_crowdfundingContributions
+WHERE userID = 151
+ORDER BY crowdfundinCotributionID DESC;
+GO
 
 
--- Invertir
+-- Desencriptar para comprobar
 
-EXEC dbo.sp_Invertir 
-    1,         -- @proposalID
-    5,          -- @userID
-    10000.00,     -- @amount
-    1;          -- @paymentMethodID
+-- Abre la key del usuario
+OPEN SYMMETRIC KEY [SK_User_151]
+  DECRYPTION BY CERTIFICATE [Cert_UserKey];
 
+-- Desencripta el monto de la última contribución
+SELECT
+  crowdfundinCotributionID,
+  CAST(
+    CONVERT(varchar(50), DecryptByKey(encryptedAmount))
+    AS DECIMAL(18,2)
+  ) AS decryptedAmount
+FROM dbo.pv_crowdfundingContributions
+WHERE userID = 151
+  AND crowdfundinCotributionID = 8;  -- o el ID que corresponda
 
-
-SELECT * FROM pv_users;
-SELECT * FROM pv_propposals;
-SELECT * FROM pv_projects;
-SELECT * FROM pv_paymentMethods;
-SELECT * FROM pv_contributionStatuses;
-SELECT * FROM pv_cryptographicKeys;
-
-
-
+-- Cierra la key
+CLOSE SYMMETRIC KEY [SK_User_151];

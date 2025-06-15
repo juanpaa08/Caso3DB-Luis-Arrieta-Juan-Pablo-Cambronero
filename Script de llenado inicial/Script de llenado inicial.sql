@@ -36,30 +36,171 @@ VALUES
     ('Bank Transfer', 'SECKEY_BNK987654321', CONVERT(varbinary(512), 'APIKEY_BANK_54321'), 'https://api.banktr', GETDATE(), CONVERT(varbinary(512), '{"account":"ACC123"}'), GETDATE(), 1);
 
 
--- Procedimiento para insertar usuarios (50 usuarios)
-CREATE PROCEDURE [dbo].[sp_SeedUsers]
+USE [Caso3DB];
+GO
+
+CREATE OR ALTER PROCEDURE dbo.sp_SeedUsers
 AS
 BEGIN
-    SET NOCOUNT ON;
-    DECLARE @i INT = 1;
-    WHILE @i <= 50
+  SET NOCOUNT ON;
+
+  -----------------------------------------------------
+  -- A) Master Key y Certificado (si no existen)
+  -----------------------------------------------------
+  IF NOT EXISTS (
+    SELECT 1
+      FROM sys.symmetric_keys
+     WHERE name = '##MS_DatabaseMasterKey##'
+  )
+    CREATE MASTER KEY
+      ENCRYPTION BY PASSWORD = 'UnaClaveMuyFuerte!2025';
+
+  OPEN MASTER KEY
+    DECRYPTION BY PASSWORD = 'UnaClaveMuyFuerte!2025';
+
+  IF NOT EXISTS (
+    SELECT 1
+      FROM sys.certificates
+     WHERE name = 'Cert_UserKey'
+  )
+    CREATE CERTIFICATE Cert_UserKey
+      WITH SUBJECT = 'Certificado de llaves usuario';
+  -----------------------------------------------------
+
+  DECLARE
+    @i               INT               = 1,
+    @userID          INT,
+    @keyName         SYSNAME,
+    @keyGUID         UNIQUEIDENTIFIER,
+    @keyValue        VARBINARY(250),
+    @hashKey         VARBINARY(250),
+    @keyTypeID       INT,
+    @algID           INT,
+    @mainUseID       INT,
+    @enclaveID       INT,
+    @sigID           INT,
+    @sql             NVARCHAR(MAX);
+
+  -- Leer defaults de tablas maestras
+  SELECT TOP 1 @keyTypeID = keyTypeID FROM dbo.pv_keyTypes ORDER BY keyTypeID;
+  SELECT TOP 1 @algID     = algorithmID FROM dbo.pv_algorithms ORDER BY algorithmID;
+  SELECT TOP 1 @mainUseID = mainUseID   FROM dbo.pv_mainUses   ORDER BY mainUseID;
+  SELECT TOP 1 @enclaveID = secureEnclaveID FROM dbo.pv_secureEnclave ORDER BY secureEnclaveID;
+  SELECT TOP 1 @sigID     = digitalSignatureID FROM dbo.pv_digitalSignature ORDER BY digitalSignatureID;
+
+  WHILE @i <= 50
+  BEGIN
+    ------------------------------------------
+    -- 1) Inserta el usuario
+    ------------------------------------------
+    INSERT INTO dbo.pv_users
+      (name, lastName, birthDate, registerDate, lastUpdate,
+       accountStatusID, identityHash, password, failedAttempts,
+       publicKey, privateKeyEncrypted)
+    VALUES
+      (
+        'Usuario' + CAST(@i AS NVARCHAR(3)),
+        'Apellido' + CAST(@i AS NVARCHAR(3)),
+        DATEADD(YEAR, -RAND() * 40 - 20, '2025-06-10'),
+        DATEADD(DAY,  -RAND() * 180, '2025-06-10 09:34:00'),
+        '2025-06-10 09:34:00',
+        CASE WHEN @i % 3 = 0 THEN 3 ELSE 1 END,
+        'IDH_U' + RIGHT('00' + CAST(@i AS NVARCHAR(3)), 3),
+        CONVERT(VARBINARY(512), 'PASS_U' + CAST(@i AS NVARCHAR(3))),
+        CASE WHEN @i % 5 = 0 THEN 1 ELSE 0 END,
+        CONVERT(VARBINARY(MAX), 'PUBKEY_U' + CAST(@i AS NVARCHAR(3))),
+        CONVERT(VARBINARY(MAX), 'PRVKEY_U' + CAST(@i AS NVARCHAR(3)))
+      );
+    SET @userID = SCOPE_IDENTITY();
+
+    ------------------------------------------
+    -- 2) Crea la symmetric key del usuario
+    ------------------------------------------
+    SET @keyName = N'SK_User_' + CAST(@userID AS NVARCHAR(10));
+    IF NOT EXISTS (
+      SELECT 1 FROM sys.symmetric_keys WHERE name = @keyName
+    )
     BEGIN
-        INSERT INTO [dbo].[pv_users] (name, lastName, birthDate, registerDate, lastUpdate, accountStatusID, identityHash, password, failedAttempts, publicKey, privateKeyEncrypted)
-        VALUES 
-            ('Usuario' + CAST(@i AS NVARCHAR(3)), 'Apellido' + CAST(@i AS NVARCHAR(3)), DATEADD(year, -RAND() * 40 - 20, '2025-06-10'), 
-             DATEADD(day, -RAND() * 180, '2025-06-10 09:34:00'), '2025-06-10 09:34:00', 
-             CASE WHEN @i % 3 = 0 THEN 3 ELSE 1 END, 
-             'IDH_U' + RIGHT('00' + CAST(@i AS NVARCHAR(3)), 3), 
-             CONVERT(varbinary(512), 'PASS_U' + CAST(@i AS NVARCHAR(3))), 
-             CASE WHEN @i % 5 = 0 THEN 1 ELSE 0 END, 
-             CONVERT(varbinary(max), 'PUBKEY_U' + CAST(@i AS NVARCHAR(3))), 
-             CONVERT(varbinary(max), 'PRVKEY_U' + CAST(@i AS NVARCHAR(3))));
-        SET @i = @i + 1;
+      SET @sql = N'CREATE SYMMETRIC KEY ' 
+        + QUOTENAME(@keyName)
+        + N' WITH ALGORITHM = AES_256 ENCRYPTION BY CERTIFICATE Cert_UserKey;';
+      EXEC sp_executesql @sql;
     END
+
+    -- Obtener GUID de la key
+    SET @keyGUID = KEY_GUID(@keyName);
+
+    ------------------------------------------
+    -- 3) Generar keyValue y hashKey
+    ------------------------------------------
+    SET @keyValue = CRYPT_GEN_RANDOM(250);
+    SET @hashKey  = HASHBYTES('SHA2_256', @keyValue);
+
+    ------------------------------------------
+    -- 4) Insertar en pv_cryptographicKeys
+    ------------------------------------------
+    INSERT INTO dbo.pv_cryptographicKeys
+      (keyType, algorithm, keyValue,
+       createdAt, expirationDate, status,
+       mainUse, hashKey, enclaveID, digitalSignatureID,
+       userID, keyGUID)
+    VALUES
+      (
+        @keyTypeID,
+        @algID,
+        @keyValue,
+        GETDATE(),
+        DATEADD(YEAR,1,GETDATE()),
+        N'Activo',
+        @mainUseID,
+        @hashKey,
+        @enclaveID,
+        @sigID,
+        @userID,
+        @keyGUID
+      );
+
+    SET @i = @i + 1;
+  END
+
+  ------------------------------------------
+  -- 5) Cerrar la Master Key
+  ------------------------------------------
+  CLOSE MASTER KEY;
 END;
 GO
 
-EXEC [dbo].[sp_SeedUsers];
+-- Ejecutar el seed
+EXEC dbo.sp_SeedUsers;
+GO
+
+-- Verificar resultados
+SELECT TOP 5
+  u.userID,
+  u.name,
+  ck.cryptographicKeyID,
+  ck.keyGUID,
+  ck.keyType,
+  ck.algorithm,
+  ck.status
+FROM dbo.pv_users u
+JOIN dbo.pv_cryptographicKeys ck
+  ON u.userID = ck.userID
+ORDER BY u.userID;
+GO
+
+
+-- Verificar algunos registros
+SELECT TOP 5
+  u.userID,
+  u.name,
+  ck.cryptographicKeyID,
+  ck.status
+FROM dbo.pv_users u
+JOIN dbo.pv_cryptographicKeys ck
+  ON u.userID = ck.userID
+ORDER BY u.userID;
+GO
 
 
 -- Insertar tipos de datos
@@ -743,25 +884,25 @@ AND col_name(parent_object_id, parent_column_id) = 'createdAt';
 
 
 
-INSERT INTO [dbo].[pv_proposalValidation] (proposalID, proposalRequirementID, result, message, validationDate, automaticSystem, technicalDetails)
+INSERT INTO [dbo].[pv_proposalValidation] (
+    proposalID, proposalRequirementID, result, message, validationDate, automaticSystem, technicalDetails
+)
 VALUES 
-    (1, 1, 1, N'Validación inicial aprobada por usuario 1', '2025-17-06 14:00:00', 0, N'Validación manual - Revisión técnica completada'),
-    (2, 1, 1, N'Validación por usuario 2: aprobado', '2025-17-06 14:05:00', 0, N'Chequeo de requisitos completado - Manual'),
-    (3, 1, 0, N'Validación por usuario 3: rechazado', '2025-17-06 14:10:00', 0, N'Falta documentación técnica - Revisión manual'),
-    (4, 1, 1, N'Validación por usuario 4: aprobado', '2025-17-06 14:15:00', 1, N'Payload procesado: Análisis IA - 2025-06-13 14:15:00'),
-    (5, 1, 0, N'Validación por usuario 5: rechazado', '2025-17-06 14:20:00', 0, N'Presupuesto insuficiente - Revisión manual'),
-    (6, 1, 1, N'Validación por usuario 6: aprobado', '2025-17-06 14:25:00', 0, N'Validación manual - Aprobado por comité'),
-    (7, 1, 1, N'Validación por usuario 7: aprobado', '2025-17-06 14:30:00', 1, N'Payload procesado: Análisis IA - 2025-06-13 14:30:00'),
-    (8, 1, 0, N'Validación por usuario 8: rechazado', '2025-17-06 14:35:00', 0, N'Falta plan de ejecución - Revisión manual'),
-    (9, 1, 1, N'Validación por usuario 9: aprobado', '2025-17-06 14:40:00', 0, N'Validación manual - Aprobado por equipo'),
-    (10, 1, 1, N'Validación por usuario 10: aprobado', '2025-17-06 14:45:00', 1, N'Payload procesado: Análisis IA - 2025-06-13 14:45:00'),
-    (11, 1, 0, N'Validación por usuario 11: rechazado', '2025-17-06 14:50:00', 0, N'Incumplimiento de cronograma - Revisión manual'),
-    (12, 1, 1, N'Validación por usuario 12: aprobado', '2025-17-06 14:55:00', 0, N'Validación manual - Aprobado por revisión'),
-    (13, 1, 1, N'Validación por usuario 13: aprobado', '2025-17-06 15:00:00', 1, N'Payload procesado: Análisis IA - 2025-06-13 15:00:00'),
-    (14, 1, 0, N'Validación por usuario 14: rechazado', '2025-17-06 15:05:00', 0, N'Falta aprobación municipal - Revisión manual'),
-    (15, 1, 1, N'Validación por usuario 15: aprobado', '2025-17-06 15:10:00', 0, N'Validación manual - Aprobado por equipo');
-
-
+    (1, 1, 1, N'Validación inicial aprobada por usuario 1', '2025-06-17 14:00:00', 0, N'Validación manual - Revisión técnica completada'),
+    (2, 1, 1, N'Validación por usuario 2: aprobado', '2025-06-17 14:05:00', 0, N'Chequeo de requisitos completado - Manual'),
+    (3, 1, 0, N'Validación por usuario 3: rechazado', '2025-06-17 14:10:00', 0, N'Falta documentación técnica - Revisión manual'),
+    (4, 1, 1, N'Validación por usuario 4: aprobado', '2025-06-17 14:15:00', 1, N'Payload procesado: Análisis IA - 2025-06-13 14:15:00'),
+    (5, 1, 0, N'Validación por usuario 5: rechazado', '2025-06-17 14:20:00', 0, N'Presupuesto insuficiente - Revisión manual'),
+    (6, 1, 1, N'Validación por usuario 6: aprobado', '2025-06-17 14:25:00', 0, N'Validación manual - Aprobado por comité'),
+    (7, 1, 1, N'Validación por usuario 7: aprobado', '2025-06-17 14:30:00', 1, N'Payload procesado: Análisis IA - 2025-06-13 14:30:00'),
+    (8, 1, 0, N'Validación por usuario 8: rechazado', '2025-06-17 14:35:00', 0, N'Falta plan de ejecución - Revisión manual'),
+    (9, 1, 1, N'Validación por usuario 9: aprobado', '2025-06-17 14:40:00', 0, N'Validación manual - Aprobado por equipo'),
+    (10, 1, 1, N'Validación por usuario 10: aprobado', '2025-06-17 14:45:00', 1, N'Payload procesado: Análisis IA - 2025-06-13 14:45:00'),
+    (11, 1, 0, N'Validación por usuario 11: rechazado', '2025-06-17 14:50:00', 0, N'Incumplimiento de cronograma - Revisión manual'),
+    (12, 1, 1, N'Validación por usuario 12: aprobado', '2025-06-17 14:55:00', 0, N'Validación manual - Aprobado por revisión'),
+    (13, 1, 1, N'Validación por usuario 13: aprobado', '2025-06-17 15:00:00', 1, N'Payload procesado: Análisis IA - 2025-06-13 15:00:00'),
+    (14, 1, 0, N'Validación por usuario 14: rechazado', '2025-06-17 15:05:00', 0, N'Falta aprobación municipal - Revisión manual'),
+    (15, 1, 1, N'Validación por usuario 15: aprobado', '2025-06-17 15:10:00', 0, N'Validación manual - Aprobado por equipo');
 
 
 -- Insertar datos en pv_voteQuestions para dashboard de consulta
@@ -1073,3 +1214,16 @@ SELECT * FROM [dbo].[pv_transactions];
 SELECT * FROM [dbo].[pv_proposalCore];
 SELECT * FROM [dbo].[pv_proposalValidation];
 SELECT * FROM [dbo].[pv_voteMapping];
+
+-- Agregar estos campos
+
+-- 1) Agregar columna para el valor cifrado en contribuciones
+ALTER TABLE dbo.pv_crowdfundingContributions
+ADD encryptedAmount VARBINARY(MAX) NULL;
+GO
+
+-- 2) Agregar columna para almacenar el GUID de la symmetric key
+ALTER TABLE dbo.pv_cryptographicKeys
+ADD keyGUID UNIQUEIDENTIFIER NULL;
+GO
+
