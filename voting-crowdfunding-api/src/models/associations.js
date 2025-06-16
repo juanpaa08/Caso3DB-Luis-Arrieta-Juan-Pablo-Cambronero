@@ -6,6 +6,7 @@ const pv_cryptographicKeys = require('./pv_cryptographicKeys');
 const pv_workflowLogs = require('./pv_workflowLogs');
 const pv_votingStatuses = require('./pv_votingStatuses');
 const pv_votingCoreResultTypes = require('./pv_votingCoreResultTypes');
+const pv_biometricData = require('./pv_biometricData');
 
 // Relaciones
 pv_votings.belongsTo(pv_votingCore, { foreignKey: 'votingID', targetKey: 'votingID', as: 'votingCore' });
@@ -23,5 +24,6 @@ module.exports = {
   pv_cryptographicKeys,
   pv_workflowLogs,
   pv_votingStatuses,
-  pv_votingCoreResultTypes
+  pv_votingCoreResultTypes,
+  pv_biometricData
 };

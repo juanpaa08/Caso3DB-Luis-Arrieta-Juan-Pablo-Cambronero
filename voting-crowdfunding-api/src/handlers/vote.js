@@ -39,17 +39,17 @@ async function voteHandler(event) {
     }
 
     const body = JSON.parse(event.body || '{}');
-    const { userID, votingID, proposalID, decision } = body;
+    const { userID, votingID, proposalID, decision, biometricDataID } = body;
 
-    if (!userID || !votingID || !proposalID || !decision) {
+    if (!userID || !votingID || !proposalID || !decision || !biometricDataID) {
       return {
         statusCode: 400,
-        body: JSON.stringify({ error: 'userID, votingID, proposalID y decision son requeridos' }),
+        body: JSON.stringify({ error: 'userID, votingID, proposalID, decision y biometricDataID son requeridos' }),
         headers: { 'Access-Control-Allow-Origin': '*' },
       };
     }
 
-    if (isNaN(parseInt(userID)) || isNaN(parseInt(votingID)) || isNaN(parseInt(proposalID))) {
+    if (isNaN(parseInt(userID)) || isNaN(parseInt(votingID)) || isNaN(parseInt(proposalID)) || isNaN(parseInt(biometricDataID))) {
       return {
         statusCode: 400,
         body: JSON.stringify({ error: 'userID, votingID y proposalID deben ser números válidos' }),
@@ -57,7 +57,7 @@ async function voteHandler(event) {
       };
     }
 
-    const result = await vote({ userID, votingID, proposalID, decision });
+    const result = await vote({ userID, votingID, proposalID, decision, biometricDataID });
 
     return {
       statusCode: 201,

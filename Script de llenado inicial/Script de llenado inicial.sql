@@ -88,7 +88,7 @@ BEGIN
   SELECT TOP 1 @enclaveID = secureEnclaveID FROM dbo.pv_secureEnclave ORDER BY secureEnclaveID;
   SELECT TOP 1 @sigID     = digitalSignatureID FROM dbo.pv_digitalSignature ORDER BY digitalSignatureID;
 
-  WHILE @i <= 50
+  WHILE @i <= 200
   BEGIN
     ------------------------------------------
     -- 1) Inserta el usuario
@@ -1350,8 +1350,6 @@ WHERE proposalTypeID = 6;
 
 
 
-
-
 -- Insertar datos en cryptographic key para endpoint por ORM de votar
 
 
@@ -1363,7 +1361,66 @@ VALUES
 	(1, 1, CONVERT(varbinary(250), 'KEYVAL_004'), '2025-06-10 10:13:00', '2026-06-10 10:13:00', N'Activo', 2, CONVERT(varbinary(250), HASHBYTES('SHA2_256', 'HASHKEY_004')), 2, NULL, 4, N'INST001'),
 	(1, 1, CONVERT(varbinary(250), 'KEYVAL_005'), '2025-06-10 10:13:00', '2026-06-10 10:13:00', N'Activo', 2, CONVERT(varbinary(250), HASHBYTES('SHA2_256', 'HASHKEY_005')), 2, NULL, 5, N'INST001'),
 	(1, 1, CONVERT(varbinary(250), 'KEYVAL_006'), '2025-06-10 10:13:00', '2026-06-10 10:13:00', N'Activo', 2, CONVERT(varbinary(250), HASHBYTES('SHA2_256', 'HASHKEY_006')), 2, NULL, 6, N'INST001');
+	
 
-    
+-- Insertar datos en pv_workFlowParameters para el SP-B de revisarPropuesta  
 
-SELECT * FROM pv_workFlowsInstances WHERE workFlowID = 3;
+INSERT INTO [dbo].[pv_workflowParameters] (workflowDefinitionID, parameterKey, parameterValueDefault, dataType, isRequired)
+VALUES 
+    (1, 'proposalRequirementID', '1', 'NUM', 1),
+    (1, 'approvedStatus', '1', 'STR', 1),
+    (1, 'rejectedStatus', '0', 'STR', 1),
+    (1, 'approvedValidationStatusID', (SELECT validationStatusID FROM pv_validationStatus WHERE code = 'APRV'), 'NUM', 1),
+    (1, 'rejectedValidationStatusID', (SELECT validationStatusID FROM pv_validationStatus WHERE code = 'REJ'), 'NUM', 1);
+
+
+-- Crear tabla para registrar el intento con motivo del rechazo y timestamp, necesario para endpoint por ORM de comentar
+
+CREATE TABLE pv_commentRejectionLogs (
+    rejectionLogID INT IDENTITY(1,1) PRIMARY KEY,
+    proposalID INT NOT NULL,
+    userID INT NOT NULL,
+    content TEXT NOT NULL,
+    rejectionReason NVARCHAR(255) NOT NULL,
+    timestamp DATETIME NOT NULL DEFAULT GETDATE()
+);
+
+SELECT name, definition
+FROM sys.default_constraints
+WHERE parent_object_id = OBJECT_ID('pv_commentRejectionLogs')
+AND col_name(parent_object_id, parent_column_id) = 'timestamp';
+
+select * from pv_commentRejectionLogs;
+
+
+-- Llenar campos en la tabla de pv_biometricData para validar autenticación multifactor (MFA) y comprobación de vida del enpoint por ORM de votar
+
+
+INSERT INTO dbo.pv_biometricData (userID, biometricType, captureDevice, captureDate, sampleQuality, enabled, modelVersion, integrityHash)
+VALUES
+(1, 'Fingerprint', 'Scanner1', GETDATE(), 85, 1, 'v1.0', 0x1234567890abcdef),
+(2, 'Face', 'Camera2', GETDATE(), 90, 1, 'v1.0', 0xabcdef1234567890),
+(3, 'Iris', 'Scanner3', GETDATE(), 88, 1, 'v2.0', 0x7890abcdef123456),
+-- Continúa hasta el userID 50...
+(50, 'Fingerprint', 'Scanner1', GETDATE(), 92, 1, 'v2.0', 0x4567890abcdef123);
+
+-- Rellena los valores intermedios (del 4 al 49) con un bucle o más INSERTs
+DECLARE @i INT = 4;
+WHILE @i <= 49
+BEGIN
+    INSERT INTO dbo.pv_biometricData (userID, biometricType, captureDevice, captureDate, sampleQuality, enabled, modelVersion, integrityHash)
+    VALUES (
+        @i,
+        CASE WHEN @i % 3 = 0 THEN 'Iris' WHEN @i % 2 = 0 THEN 'Face' ELSE 'Fingerprint' END,
+        CASE WHEN @i % 3 = 0 THEN 'Scanner3' WHEN @i % 2 = 0 THEN 'Camera2' ELSE 'Scanner1' END,
+        DATEADD(day, @i - 1, '2025-06-01 10:00:00'),
+        80 + (@i % 20), -- Calidad entre 80 y 99
+        1,
+        CASE WHEN @i > 25 THEN 'v2.0' ELSE 'v1.0' END,
+        0x1122334455667788 -- Placeholder hash
+    );
+    SET @i = @i + 1;
+END;
+
+SELECT * FROM pv_biometricData;
+

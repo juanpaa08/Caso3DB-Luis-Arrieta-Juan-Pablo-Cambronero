@@ -17,6 +17,9 @@ async function investService(investmentObj, token) {
 
     return result;
   } catch (err) {
+    if (err.message.includes('THROW')) {
+      throw { status: 400, message: err.message };
+    }
     throw new Error(`Error en investService: ${err.message}`);
   }
 }

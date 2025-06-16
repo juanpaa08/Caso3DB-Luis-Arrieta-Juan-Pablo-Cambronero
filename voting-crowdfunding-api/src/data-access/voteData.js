@@ -1,5 +1,6 @@
 // src/data-access/voteData.js
 const { pv_users, pv_votings, pv_votes, pv_votingCore, pv_cryptographicKeys, pv_workflowLogs, pv_votingStatuses } = require('../models/associations');
+const pv_biometricData = require('../models/pv_biometricData');
 
 async function getVotingById(votingID) {
   return await pv_votings.findOne({
@@ -42,4 +43,14 @@ async function logWorkflow(workflowInstanceID, userID, message, description, det
   return log;
 }
 
-module.exports = { getUserById, getVotingById, hasVoted, recordVote, logWorkflow };
+async function validateBiometric(userID, biometricDataID) {
+  const biometric = await pv_biometricData.findOne({
+    where: { biometricDataID, userID, enabled: true },
+  });
+  if (!biometric || biometric.sampleQuality < 80) { // Umbral de calidad
+    return false;
+  }
+  return true;
+}
+
+module.exports = { getUserById, getVotingById, hasVoted, recordVote, logWorkflow, validateBiometric };

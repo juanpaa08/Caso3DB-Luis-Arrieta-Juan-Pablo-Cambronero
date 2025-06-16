@@ -38,22 +38,15 @@ functions:
           cors: true
 
 
-  comentar:
-    handler: src/handler.comentar
-    events:
-      - http:
-          path: proposals/{id}/comment
-          method: post
-          cors: true
-
  
-  comentarPropuesta: # Nueva función
+  comentarPropuesta:
     handler: src/handlers/comment.comentarPropuestaHandler
     events:
       - http:
-          path: api/comments/{id}
+          path: /proposals/{id}/comments
           method: post
           cors: true
+          
   
   voteHandler:
     handler: src/handlers/vote.voteHandler

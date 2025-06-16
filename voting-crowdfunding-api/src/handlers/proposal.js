@@ -36,9 +36,8 @@ async function createUpdateProposal(event) {
       };
     }
 
-    const proposalID = parseInt(event.pathParameters?.id, 10) || null;
     const body = JSON.parse(event.body || '{}');
-    const { title, userID: bodyUserID, proposalTypeID, targetGroups, documents } = body;
+    const { proposalID, title, userID: bodyUserID, proposalTypeID, targetGroups, documents } = body;
 
     if (!title || !bodyUserID || !proposalTypeID) {
       return {
@@ -48,24 +47,25 @@ async function createUpdateProposal(event) {
     }
 
     const result = await createUpdateProposalService({
-      proposalID,
+      proposalID: proposalID || null, // Usar el proposalID del cuerpo JSON
       title,
       userID: bodyUserID,
       proposalTypeID,
       targetGroups: targetGroups || [],
       documents: documents || [],
-      token, // Pasa el token al servicio
+      token,
     });
+
+    if (result.status && result.status.startsWith('Error:')) {
+      return {
+        statusCode: 400,
+        body: JSON.stringify({ error: result.status }),
+      };
+    }
 
     return {
       statusCode: 201,
-      body: JSON.stringify({
-        message: 'Propuesta creada/actualizada exitosamente',
-        proposalID: result.proposalID,
-        status: result.status,
-        integrityHash: result.integrityHash,
-        aiPayload: result.aiPayload,
-      }),
+      body: JSON.stringify(result),
       headers: {
         'Access-Control-Allow-Origin': '*',
       },

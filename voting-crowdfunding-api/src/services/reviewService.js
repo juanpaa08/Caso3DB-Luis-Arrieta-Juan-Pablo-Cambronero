@@ -22,6 +22,9 @@ async function reviewProposalService({ proposalID, reviewerID, validationResult,
       success: result.success,
     };
   } catch (err) {
+    if (err.message.includes('Configuración del workflow incompleta')) {
+      throw { status: 400, message: err.message };
+    }
     throw new Error(`Error en servicio de revisión: ${err.message}`);
   }
 }
