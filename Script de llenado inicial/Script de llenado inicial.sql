@@ -848,7 +848,6 @@ VALUES
  GETDATE(), GETDATE(), 5);
 
 
-
 ALTER TABLE pv_proposalComment
 ADD CONSTRAINT DF_pv_proposalComment_publishDate
 DEFAULT GETDATE() FOR publishDate;
@@ -1124,6 +1123,7 @@ VALUES
 
 
 --Crear vista para fusionar y agrupar la información de los votos con los datos demográficos de forma anonima
+
 CREATE VIEW dbo.vw_VotosDemograficos AS
 -- Agregación por Edad
 SELECT
@@ -1215,6 +1215,7 @@ SELECT * FROM [dbo].[pv_transactions];
 SELECT * FROM [dbo].[pv_proposalCore];
 SELECT * FROM [dbo].[pv_proposalValidation];
 SELECT * FROM [dbo].[pv_voteMapping];
+SELECT * FROM [dbo].[pv_proposalComment];
 
 -- Agregar estos campos
 
@@ -1351,8 +1352,18 @@ WHERE proposalTypeID = 6;
 
 
 
+-- Insertar datos en cryptographic key para endpoint por ORM de votar
 
 
+-- Insertar datos en pv_cryptographicKeys (IDs temporales)
+INSERT INTO [dbo].[pv_cryptographicKeys] (keyType, algorithm, keyValue, createdAt, expirationDate, status, mainUse, hashKey, enclaveID, digitalSignatureID, userID, institutionID)
+VALUES 
+	(1, 2, CONVERT(varbinary(250), 'KEYVAL_002'), '2025-06-10 10:13:00', '2026-06-10 10:13:00', N'Activo', 2, CONVERT(varbinary(250), HASHBYTES('SHA2_256', 'HASHKEY_002')), 2, NULL, 2, N'INST001'),
+	(1, 3, CONVERT(varbinary(250), 'KEYVAL_003'), '2025-06-10 10:13:00', '2026-06-10 10:13:00', N'Activo', 2, CONVERT(varbinary(250), HASHBYTES('SHA2_256', 'HASHKEY_002')), 2, NULL, 3, N'INST001'),
+	(1, 1, CONVERT(varbinary(250), 'KEYVAL_004'), '2025-06-10 10:13:00', '2026-06-10 10:13:00', N'Activo', 2, CONVERT(varbinary(250), HASHBYTES('SHA2_256', 'HASHKEY_004')), 2, NULL, 4, N'INST001'),
+	(1, 1, CONVERT(varbinary(250), 'KEYVAL_005'), '2025-06-10 10:13:00', '2026-06-10 10:13:00', N'Activo', 2, CONVERT(varbinary(250), HASHBYTES('SHA2_256', 'HASHKEY_005')), 2, NULL, 5, N'INST001'),
+	(1, 1, CONVERT(varbinary(250), 'KEYVAL_006'), '2025-06-10 10:13:00', '2026-06-10 10:13:00', N'Activo', 2, CONVERT(varbinary(250), HASHBYTES('SHA2_256', 'HASHKEY_006')), 2, NULL, 6, N'INST001');
 
+    
 
-
+SELECT * FROM pv_workFlowsInstances WHERE workFlowID = 3;

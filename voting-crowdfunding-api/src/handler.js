@@ -1,12 +1,19 @@
-const { comentarPropuesta } = require('./services/commentService');
-const { vote } = require('./services/voteService');
-
-
 module.exports.comentar = async (event) => {
   try {
-    const userID = event.requestContext?.authorizer?.principalId || 123;
+    const userID = event.requestContext?.authorizer?.principalId;
+    if (!userID || isNaN(parseInt(userID))) {
+      return { statusCode: 400, body: JSON.stringify({ error: 'userID inválido o requerido' }) };
+    }
+
     const proposalID = parseInt(event.pathParameters.id, 10);
-    const { content, hasSensitiveContent } = JSON.parse(event.body);
+    if (isNaN(proposalID)) {
+      return { statusCode: 400, body: JSON.stringify({ error: 'proposalID inválido' }) };
+    }
+
+    const { content, hasSensitiveContent } = JSON.parse(event.body || '{}');
+    if (!content || typeof hasSensitiveContent !== 'boolean') {
+      return { statusCode: 400, body: JSON.stringify({ error: 'content y hasSensitiveContent son requeridos' }) };
+    }
 
     const result = await comentarPropuesta({
       userID,
@@ -33,13 +40,15 @@ module.exports.comentar = async (event) => {
 
 module.exports.votar = async (event) => {
   try {
-    // Obtener userID y convertir a número, usar 123 como fallback
-    const userID = parseInt(event.requestContext?.authorizer?.principalId) || 1;
-    if (isNaN(userID)) {
-      throw new Error('ID de usuario no válido').status = 400;
+    const userID = event.requestContext?.authorizer?.principalId;
+    if (!userID || isNaN(parseInt(userID))) {
+      return { statusCode: 400, body: JSON.stringify({ error: 'userID inválido o requerido' }) };
     }
 
-    const { votingID, proposalID, decision } = JSON.parse(event.body);
+    const { votingID, proposalID, decision } = JSON.parse(event.body || '{}');
+    if (!votingID || !proposalID || !decision) {
+      return { statusCode: 400, body: JSON.stringify({ error: 'votingID, proposalID y decision son requeridos' }) };
+    }
 
     const result = await vote({ userID, votingID, proposalID, decision });
 

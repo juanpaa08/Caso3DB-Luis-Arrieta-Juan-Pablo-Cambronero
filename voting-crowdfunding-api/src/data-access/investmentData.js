@@ -29,18 +29,18 @@ async function invest(investmentData) {
         equityPercent: contribution.equityPercent,
         cryptoKeyID: contribution.cryptoKeyID,
         cryptoKeyAction: contribution.cryptoKeyAction,
-        statusID: contribution.statusID
+        statusID: contribution.statusID,
       },
       installments: installments.map(i => ({
         contributionID: i.contributionID,
         dueDate: i.dueDate,
-        installmentAmount: i.installmentAmount
+        installmentAmount: i.installmentAmount,
       })),
       reviews: reviews.map(r => ({
         contributionID: r.contributionID,
         reviewDate: r.reviewDate,
-        milestone: r.milestone
-      }))
+        milestone: r.milestone,
+      })),
     };
   } catch (err) {
     throw new Error(`Error al llamar a sp_Invertir: ${err.message}`);

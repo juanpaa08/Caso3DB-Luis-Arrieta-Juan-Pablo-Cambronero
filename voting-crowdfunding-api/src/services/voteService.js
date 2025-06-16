@@ -1,3 +1,4 @@
+// src/services/voteService.js
 const CryptoJS = require('crypto-js');
 const { getUserById, getVotingById, hasVoted, recordVote, logWorkflow } = require('../data-access/voteData');
 const { pv_cryptographicKeys } = require('../models/associations');
@@ -32,11 +33,8 @@ async function vote({ userID, votingID, proposalID, decision }) {
     throw err;
   }
 
-
-    // Generar voterHash único
+  // Generar voterHash único
   const voterHash = CryptoJS.SHA256(`${user.identityHash}-${votingID}`).toString();
-
-
 
   // Usar identityHash como voterHash
   if (await hasVoted(user.identityHash, votingID, proposalID)) {
@@ -48,8 +46,8 @@ async function vote({ userID, votingID, proposalID, decision }) {
 
   const key = await pv_cryptographicKeys.findOne({ where: { userID, keyType: 1 } });
   if (!key) {
-    const err = new Error('Clave pública no encontrada');
-    err.status = 500;
+    const err = new Error('Clave pública no encontrada. Registra una clave pública para este usuario.');
+    err.status = 400;
     throw err;
   }
 
@@ -65,13 +63,13 @@ async function vote({ userID, votingID, proposalID, decision }) {
     voterHash: user.identityHash,
     prevHash: Buffer.from('PREV_HASH_' + userID),
     criptographicKey: key.cryptographicKeyID,
-    tokenValue: Buffer.from('TOKEN_' + userID)
-    // No incluir voteDate ni tokenUsedAt
+    tokenValue: Buffer.from('TOKEN_' + userID),
   };
-  console.log('voteData:', voteData); // Agregar log para depuración
+  console.log('voteData:', voteData);
   const vote = await recordVote(voteData);
 
-  await logWorkflow(userID, votingID, 'Voto registrado', 'Voto procesado exitosamente');
+  // Usar votingID como workflowInstanceID (ajusta si es incorrecto para tu diseño)
+  await logWorkflow(votingID, userID, 'Voto registrado', 'Voto procesado exitosamente');
 
   return { voteID: vote.voteID };
 }

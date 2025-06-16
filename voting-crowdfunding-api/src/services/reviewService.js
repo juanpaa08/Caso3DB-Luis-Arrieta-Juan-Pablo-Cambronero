@@ -4,22 +4,22 @@ const { reviewProposal } = require('../data-access/reviewData');
 
 const JWT_SECRET = 'tu_secreto_jwt';
 
-async function reviewProposalService(reviewObj, token) {
+async function reviewProposalService({ proposalID, reviewerID, validationResult, aiPayload, token }) {
   try {
     const decoded = jwt.verify(token, JWT_SECRET);
-    if (!decoded.roles.includes('ProposalReviewer') || decoded.userID !== reviewObj.reviewerID) {
+    if (!decoded.roles.includes('ProposalReviewer') || decoded.userID !== reviewerID) {
       throw new Error('Usuario no autorizado');
     }
 
     const result = await reviewProposal({
-      proposalID: reviewObj.proposalID,
-      reviewerID: reviewObj.reviewerID,
-      validationResult: reviewObj.validationResult,
-      aiPayload: reviewObj.aiPayload
+      proposalID,
+      reviewerID,
+      validationResult,
+      aiPayload,
     });
 
     return {
-      success: result.success
+      success: result.success,
     };
   } catch (err) {
     throw new Error(`Error en servicio de revisión: ${err.message}`);

@@ -46,13 +46,22 @@ functions:
           method: post
           cors: true
 
-  votar:
-    handler: src/handler.votar
+ 
+  comentarPropuesta: # Nueva función
+    handler: src/handlers/comment.comentarPropuestaHandler
     events:
       - http:
-          path: proposals/{proposalID}/vote
+          path: api/comments/{id}
           method: post
           cors: true
+  
+  voteHandler:
+    handler: src/handlers/vote.voteHandler
+    events:
+     - http:
+        path: proposals/{proposalID}/vote
+        method: post
+        cors: true
 
 plugins:
   - serverless-offline

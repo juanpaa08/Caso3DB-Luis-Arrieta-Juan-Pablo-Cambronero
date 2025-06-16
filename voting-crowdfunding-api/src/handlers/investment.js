@@ -3,21 +3,38 @@ const { investService } = require('../services/investmentService');
 
 module.exports.invest = async (event) => {
   try {
-    const body = JSON.parse(event.body || '{}');
-    const token = event.headers.Authorization?.replace('Bearer ', '');
+    console.log('Event Headers:', event.headers);
+    const authHeader = event.headers?.authorization || event.headers?.Authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return {
+        statusCode: 401,
+        body: JSON.stringify({ success: false, error: 'Token requerido' }),
+        headers: { 'Access-Control-Allow-Origin': '*' },
+      };
+    }
+    const token = authHeader.split(' ')[1];
+    console.log('Extracted Token:', token);
 
+    const body = JSON.parse(event.body || '{}');
     const investmentObj = {
       projectID: body.projectID,
-      userID: body.userID || 1,
-      amount: body.amount || 1000.00,
-      paymentMethodID: body.paymentMethodID || 1
+      userID: body.userID,
+      amount: body.amount,
+      paymentMethodID: body.paymentMethodID,
     };
 
-    if (!investmentObj.projectID || !investmentObj.userID || !investmentObj.amount || !investmentObj.paymentMethodID) {
-      return {
-        statusCode: 400,
-        body: JSON.stringify({ success: false, error: 'Faltan campos requeridos' })
-      };
+    // Validar todos los campos requeridos
+    if (!investmentObj.projectID || isNaN(parseInt(investmentObj.projectID))) {
+      return { statusCode: 400, body: JSON.stringify({ success: false, error: 'projectID inválido o requerido' }) };
+    }
+    if (!investmentObj.userID || isNaN(parseInt(investmentObj.userID))) {
+      return { statusCode: 400, body: JSON.stringify({ success: false, error: 'userID inválido o requerido' }) };
+    }
+    if (!investmentObj.amount || isNaN(parseFloat(investmentObj.amount)) || parseFloat(investmentObj.amount) <= 0) {
+      return { statusCode: 400, body: JSON.stringify({ success: false, error: 'amount inválido o requerido' }) };
+    }
+    if (!investmentObj.paymentMethodID || isNaN(parseInt(investmentObj.paymentMethodID))) {
+      return { statusCode: 400, body: JSON.stringify({ success: false, error: 'paymentMethodID inválido o requerido' }) };
     }
 
     const result = await investService(investmentObj, token);
@@ -29,16 +46,18 @@ module.exports.invest = async (event) => {
         data: {
           contribution: result.contribution,
           installments: result.installments,
-          reviews: result.reviews
+          reviews: result.reviews,
         },
-        message: 'Inversión procesada exitosamente'
-      })
+        message: 'Inversión procesada exitosamente',
+      }),
+      headers: { 'Access-Control-Allow-Origin': '*' },
     };
   } catch (err) {
     console.error('Error en invest:', err);
     return {
       statusCode: 500,
-      body: JSON.stringify({ success: false, error: err.message })
+      body: JSON.stringify({ success: false, error: err.message }),
+      headers: { 'Access-Control-Allow-Origin': '*' },
     };
   }
 };
