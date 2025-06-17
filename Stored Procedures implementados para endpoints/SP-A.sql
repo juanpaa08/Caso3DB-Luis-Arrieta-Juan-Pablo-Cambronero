@@ -1,34 +1,66 @@
-USE [Caso3DB];
+ÔªøUSE [Caso3DB];
 GO
 
 DROP PROCEDURE IF EXISTS [dbo].[sp_CreateUpdateProposal];
 GO
 
+-- Definici√≥n de tipos de tabla para TVPs
+CREATE TYPE [dbo].[TargetGroupsType] AS TABLE
+(
+    groupID INT NOT NULL
+);
+GO
+
+CREATE TYPE [dbo].[DocumentsType] AS TABLE
+(
+    fileName NVARCHAR(50),
+    size NVARCHAR(10),
+    format NVARCHAR(10),
+    uploadDate NVARCHAR(20),
+    validationStatusID NVARCHAR(10),
+    userID NVARCHAR(10),
+    institutionID NVARCHAR(10),
+    mediaTypeID NVARCHAR(10),
+    documentTypeID NVARCHAR(10)
+);
+GO
+
 CREATE OR ALTER PROCEDURE [dbo].[sp_CreateUpdateProposal]
-    @ProposalID INT = NULL,
+    @ProposalID INT = NULL OUTPUT,
     @Name NVARCHAR(150),
     @UserID INT,
     @ProposalTypeID INT,
     @IntegrityHash VARBINARY(512) = NULL,
-    @TargetGroups NVARCHAR(MAX) = NULL,
-    @Documents NVARCHAR(MAX) = NULL,
-    @Status NVARCHAR(50) OUTPUT
+    @TargetGroups [dbo].[TargetGroupsType] READONLY,
+    @Documents [dbo].[DocumentsType] READONLY,
+    @Status NVARCHAR(255) OUTPUT
 AS
 BEGIN
     SET NOCOUNT ON;
     DECLARE @TransactionCountOnEntry INT = @@TRANCOUNT;
     
     BEGIN TRY
-        -- Solo comenzar transacciÛn si no estamos dentro de una existente
+        SET NOCOUNT OFF; -- Asegurar que el recordset se devuelva
+
         IF @TransactionCountOnEntry = 0
             BEGIN TRANSACTION;
         ELSE
-            SAVE TRANSACTION sp_CreateUpdateProposal; -- Usar punto de guardado para transacciones anidadas
+            SAVE TRANSACTION sp_CreateUpdateProposal;
 
-        DECLARE @CurrentDate DATETIME = GETDATE(); -- 2025-06-11 01:27:00 CST
+        DECLARE @CurrentDate DATETIME = GETDATE();
         DECLARE @NewIntegrityHash VARBINARY(512);
-        DECLARE @VersionNumber DECIMAL(5,2) = 1.0;
-        DECLARE @ExistingVersionCount INT;
+
+        -- Calcular integrityHash antes de la inserci√≥n si es una nueva propuesta
+        IF @ProposalID IS NULL
+        BEGIN
+            SELECT @NewIntegrityHash = HASHBYTES('SHA2_256', 
+                CAST(@ProposalTypeID AS NVARCHAR(10)) + 
+                @Name + 
+                CAST(@UserID AS NVARCHAR(10)) + 
+                CAST(@CurrentDate AS NVARCHAR(50)) + 
+                CAST(@CurrentDate AS NVARCHAR(50)) + 
+                COALESCE(CAST(@IntegrityHash AS NVARCHAR(512)), ''));
+        END
 
         -- Validar permisos del usuario
         IF NOT EXISTS (SELECT 1 FROM [dbo].[pv_users] WHERE userID = @UserID AND accountStatusID = 1)
@@ -36,14 +68,9 @@ BEGIN
             SET @Status = 'Error: Usuario no autorizado o inactivo';
             IF @TransactionCountOnEntry = 0 AND @@TRANCOUNT > 0
                 ROLLBACK TRANSACTION;
+            SELECT @ProposalID AS proposalID, @Status AS status;
             RETURN;
         END
-
-        -- Generar o actualizar IntegrityHash
-        IF @IntegrityHash IS NULL
-            SET @NewIntegrityHash = HASHBYTES('SHA2_256', @Name + CAST(@CurrentDate AS NVARCHAR(50)));
-        ELSE
-            SET @NewIntegrityHash = @IntegrityHash;
 
         -- Crear o actualizar la propuesta
         IF @ProposalID IS NULL
@@ -60,39 +87,43 @@ BEGIN
                 SET @Status = 'Error: No tienes permisos para actualizar esta propuesta';
                 IF @TransactionCountOnEntry = 0 AND @@TRANCOUNT > 0
                     ROLLBACK TRANSACTION;
+                SELECT @ProposalID AS proposalID, @Status AS status;
                 RETURN;
             END
 
             UPDATE [dbo].[pv_propposals]
             SET proposalTypeID = @ProposalTypeID,
                 name = @Name,
-                lastUpdate = @CurrentDate,
-                integrityHash = @NewIntegrityHash
+                lastUpdate = @CurrentDate
             WHERE proposalID = @ProposalID;
             SET @Status = 'Actualizado';
+
+            -- Calcular y actualizar integrityHash para actualizaci√≥n
+            SELECT @NewIntegrityHash = HASHBYTES('SHA2_256', 
+                CAST(@ProposalID AS NVARCHAR(10)) + 
+                CAST(@ProposalTypeID AS NVARCHAR(10)) + 
+                @Name + 
+                CAST(@UserID AS NVARCHAR(10)) + 
+                CAST(@CurrentDate AS NVARCHAR(50)) + 
+                CAST(@CurrentDate AS NVARCHAR(50)) + 
+                COALESCE(CAST((SELECT integrityHash FROM [dbo].[pv_propposals] WHERE proposalID = @ProposalID) AS NVARCHAR(512)), ''));
+            UPDATE [dbo].[pv_propposals]
+            SET integrityHash = @NewIntegrityHash
+            WHERE proposalID = @ProposalID;
         END
 
-        -- Registrar versiÛn del historial
-        SELECT @ExistingVersionCount = COUNT(*) FROM [dbo].[pv_proposalVersion] WHERE proposalID = @ProposalID;
-        IF @ExistingVersionCount > 0
-            SET @VersionNumber = (SELECT MAX(versionNumber) + 0.1 FROM [dbo].[pv_proposalVersion] WHERE proposalID = @ProposalID);
-
-        INSERT INTO [dbo].[pv_proposalVersion] (proposalID, versionNumber, createdAt, madeChanges, versionStatus, contentHash, revisionComments)
-        VALUES (@ProposalID, @VersionNumber, @CurrentDate, 'ActualizaciÛn de propuesta', 'Pendiente', @NewIntegrityHash, 'En revisiÛn por IA');
-
         -- Asociar grupos objetivo
-        IF @TargetGroups IS NOT NULL
+        IF EXISTS (SELECT 1 FROM @TargetGroups)
         BEGIN
             DELETE FROM [dbo].[pv_proposalTargetGroups] WHERE proposalID = @ProposalID;
             INSERT INTO [dbo].[pv_proposalTargetGroups] (proposalID, groupID, createdAt, deleted)
-            SELECT @ProposalID, JSON_VALUE(value, '$.groupID'), @CurrentDate, 0
-            FROM OPENJSON(@TargetGroups);
+            SELECT @ProposalID, groupID, @CurrentDate, 0
+            FROM @TargetGroups;
         END
 
         -- Manejar archivos adjuntos con preprocesamiento
-        IF @Documents IS NOT NULL
+        IF EXISTS (SELECT 1 FROM @Documents)
         BEGIN
-            -- Crear tabla temporal para depuraciÛn
             CREATE TABLE #DebugDocuments (
                 fileName NVARCHAR(50),
                 fileHash VARBINARY(250),
@@ -116,71 +147,33 @@ BEGIN
                 RowNum INT
             );
 
-            -- Insertar datos crudos con un n˙mero de fila
             INSERT INTO #DebugDocuments (fileName, rawSize, format, rawUploadDate, rawValidationStatusID, rawUserID, rawInstitutionID, rawMediaTypeID, rawDocumentTypeID, ErrorMessage, RowNum)
             SELECT 
-                JSON_VALUE(d.value, '$.fileName'),
-                JSON_VALUE(d.value, '$.size'),
-                JSON_VALUE(d.value, '$.format'),
-                JSON_VALUE(d.value, '$.uploadDate'),
-                JSON_VALUE(d.value, '$.validationStatusID'),
-                JSON_VALUE(d.value, '$.userID'),
-                JSON_VALUE(d.value, '$.institutionID'),
-                JSON_VALUE(d.value, '$.mediaTypeID'),
-                JSON_VALUE(d.value, '$.documentTypeID'),
+                fileName,
+                size,
+                format,
+                uploadDate,
+                validationStatusID,
+                userID,
+                institutionID,
+                mediaTypeID,
+                documentTypeID,
                 NULL,
                 ROW_NUMBER() OVER (ORDER BY (SELECT NULL))
-            FROM OPENJSON(@Documents) d;
+            FROM @Documents;
 
-            -- DepuraciÛn: Verificar datos iniciales
-            -- SELECT * FROM #DebugDocuments; -- Descomenta para inspeccionar
-
-            -- Actualizar con conversiones
-            -- Paso 1: Actualizar fileHash, storageLocation y otras conversiones
             UPDATE d
             SET fileHash = CONVERT(VARBINARY(250), HASHBYTES('SHA2_256', 'DOC_' + RIGHT('000' + CAST(d.RowNum AS VARCHAR(3)), 3))),
                 storageLocation = CONVERT(VARBINARY(250), 'STOR_LOC_' + RIGHT('000' + CAST(d.RowNum AS VARCHAR(3)), 3)),
-                size = CASE 
-                       WHEN d.rawSize IS NOT NULL AND TRY_CAST(d.rawSize AS INT) IS NOT NULL 
-                       THEN CAST(d.rawSize AS INT)
-                       ELSE NULL 
-                       END,
-                uploadDate = CASE 
-                             WHEN d.rawUploadDate IS NOT NULL AND TRY_CAST(d.rawUploadDate AS DATETIME) IS NOT NULL 
-                             THEN CONVERT(DATETIME, d.rawUploadDate, 120)
-                             ELSE NULL 
-                             END,
-                validationStatusID = CASE 
-                                     WHEN d.rawValidationStatusID IS NOT NULL AND TRY_CAST(d.rawValidationStatusID AS INT) IS NOT NULL 
-                                     THEN CAST(d.rawValidationStatusID AS INT)
-                                     ELSE NULL 
-                                     END,
-                userID = CASE 
-                         WHEN d.rawUserID IS NOT NULL AND TRY_CAST(d.rawUserID AS INT) IS NOT NULL 
-                         THEN CAST(d.rawUserID AS INT)
-                         ELSE NULL 
-                         END,
-                institutionID = CASE 
-                                WHEN d.rawInstitutionID IS NULL OR (d.rawInstitutionID IS NOT NULL AND TRY_CAST(d.rawInstitutionID AS INT) IS NOT NULL) 
-                                THEN CAST(NULLIF(d.rawInstitutionID, '') AS INT)
-                                ELSE NULL 
-                                END,
-                mediaTypeID = CASE 
-                              WHEN d.rawMediaTypeID IS NOT NULL AND TRY_CAST(d.rawMediaTypeID AS INT) IS NOT NULL 
-                              THEN CAST(d.rawMediaTypeID AS INT)
-                              ELSE NULL 
-                              END,
-                documentTypeID = CASE 
-                                 WHEN d.rawDocumentTypeID IS NOT NULL AND TRY_CAST(d.rawDocumentTypeID AS INT) IS NOT NULL 
-                                 THEN CAST(d.rawDocumentTypeID AS INT)
-                                 ELSE NULL 
-                                 END
+                size = CASE WHEN d.rawSize IS NOT NULL AND TRY_CAST(d.rawSize AS INT) IS NOT NULL THEN CAST(d.rawSize AS INT) ELSE NULL END,
+                uploadDate = CASE WHEN d.rawUploadDate IS NOT NULL AND TRY_CAST(d.rawUploadDate AS DATETIME) IS NOT NULL THEN CONVERT(DATETIME, d.rawUploadDate, 120) ELSE NULL END,
+                validationStatusID = CASE WHEN d.rawValidationStatusID IS NOT NULL AND TRY_CAST(d.rawValidationStatusID AS INT) IS NOT NULL THEN CAST(d.rawValidationStatusID AS INT) ELSE NULL END,
+                userID = CASE WHEN d.rawUserID IS NOT NULL AND TRY_CAST(d.rawUserID AS INT) IS NOT NULL THEN CAST(d.rawUserID AS INT) ELSE NULL END,
+                institutionID = CASE WHEN d.rawInstitutionID IS NOT NULL AND TRY_CAST(d.rawInstitutionID AS INT) IS NOT NULL THEN CAST(d.rawInstitutionID AS INT) ELSE 0 END,
+                mediaTypeID = CASE WHEN d.rawMediaTypeID IS NOT NULL AND TRY_CAST(d.rawMediaTypeID AS INT) IS NOT NULL THEN CAST(d.rawMediaTypeID AS INT) ELSE NULL END,
+                documentTypeID = CASE WHEN d.rawDocumentTypeID IS NOT NULL AND TRY_CAST(d.rawDocumentTypeID AS INT) IS NOT NULL THEN CAST(d.rawDocumentTypeID AS INT) ELSE NULL END
             FROM #DebugDocuments d;
 
-            -- DepuraciÛn: Verificar datos despuÈs del primer UPDATE
-            -- SELECT fileName, rawSize, size, uploadDate, validationStatusID, userID, institutionID, mediaTypeID, documentTypeID, RowNum FROM #DebugDocuments; -- Descomenta para inspeccionar
-
-            -- Paso 2: Actualizar el ErrorMessage
             UPDATE d
             SET ErrorMessage = CASE 
                                WHEN d.fileName IS NULL THEN 'Invalid fileName'
@@ -191,28 +184,23 @@ BEGIN
                                WHEN d.rawValidationStatusID IS NULL OR d.validationStatusID IS NULL THEN 'Invalid validationStatusID'
                                WHEN d.storageLocation IS NULL THEN 'Invalid storageLocation'
                                WHEN d.rawUserID IS NULL OR d.userID IS NULL THEN 'Invalid userID'
+                               WHEN d.rawInstitutionID IS NULL OR d.institutionID IS NULL THEN 'Invalid institutionID'
                                WHEN d.rawMediaTypeID IS NULL OR d.mediaTypeID IS NULL THEN 'Invalid mediaTypeID'
                                WHEN d.rawDocumentTypeID IS NULL OR d.documentTypeID IS NULL THEN 'Invalid documentTypeID'
                                ELSE NULL
                                END
             FROM #DebugDocuments d;
 
-            -- DepuraciÛn: Verificar datos despuÈs del segundo UPDATE
-            -- SELECT fileName, size, ErrorMessage FROM #DebugDocuments; -- Descomenta para inspeccionar
-
-            -- Verificar si hay errores
             IF EXISTS (SELECT 1 FROM #DebugDocuments WHERE ErrorMessage IS NOT NULL)
             BEGIN
                 SET @Status = 'Error: ' + (SELECT TOP 1 ErrorMessage FROM #DebugDocuments WHERE ErrorMessage IS NOT NULL);
                 IF @TransactionCountOnEntry = 0 AND @@TRANCOUNT > 0
                     ROLLBACK TRANSACTION;
-                ELSE IF @TransactionCountOnEntry > 0
-                    ROLLBACK TRANSACTION sp_CreateUpdateProposal;
-                DROP TABLE IF EXISTS #DebugDocuments;
+                DROP TABLE #DebugDocuments;
+                SELECT @ProposalID AS proposalID, @Status AS status;
                 RETURN;
             END
 
-            -- Crear tabla temporal final con restricciones
             CREATE TABLE #TempDocuments (
                 fileName NVARCHAR(50) NOT NULL,
                 fileHash VARBINARY(250) NOT NULL,
@@ -222,35 +210,39 @@ BEGIN
                 validationStatusID INT NOT NULL,
                 storageLocation VARBINARY(250) NOT NULL,
                 userID INT NOT NULL,
-                institutionID INT NULL,
+                institutionID INT NOT NULL,
                 mediaTypeID INT NOT NULL,
                 documentTypeID INT NOT NULL
             );
 
-            -- DepuraciÛn: Verificar datos antes de insertar en #TempDocuments
-            -- SELECT * FROM #DebugDocuments; -- Descomenta para inspeccionar
-
-            -- Insertar datos validados
             INSERT INTO #TempDocuments (fileName, fileHash, size, format, uploadDate, validationStatusID, storageLocation, userID, institutionID, mediaTypeID, documentTypeID)
-            SELECT fileName, fileHash, size, format, uploadDate, validationStatusID, storageLocation, userID, institutionID, mediaTypeID, documentTypeID
-            FROM #DebugDocuments;
+            SELECT fileName, fileHash, size, format, uploadDate, validationStatusID, storageLocation, userID, 
+                   COALESCE(institutionID, 0),
+                   mediaTypeID, documentTypeID
+            FROM #DebugDocuments
+            WHERE fileName IS NOT NULL AND size IS NOT NULL AND format IS NOT NULL AND uploadDate IS NOT NULL 
+                  AND validationStatusID IS NOT NULL AND storageLocation IS NOT NULL AND userID IS NOT NULL 
+                  AND institutionID IS NOT NULL AND mediaTypeID IS NOT NULL AND documentTypeID IS NOT NULL;
 
-            -- DepuraciÛn: Verificar datos en #TempDocuments
-            -- SELECT * FROM #TempDocuments; -- Descomenta para inspeccionar
+            IF @@ROWCOUNT = 0
+            BEGIN
+                SET @Status = 'Error: No se proporcionaron documentos v√°lidos';
+                IF @TransactionCountOnEntry = 0 AND @@TRANCOUNT > 0
+                    ROLLBACK TRANSACTION;
+                DROP TABLE #DebugDocuments;
+                SELECT @ProposalID AS proposalID, @Status AS status;
+                RETURN;
+            END
 
-           
-            -- Insertar en pv_proposalDocument
             INSERT INTO [dbo].[pv_proposalDocument] (proposalID, proposalVersionID, fileName, fileHash, size, format, uploadDate, validationStatusID, storageLocation, userID, institutionID, mediaTypeID, documentTypeID)
             SELECT @ProposalID, COALESCE((SELECT MAX(proposalVersionID) FROM [dbo].[pv_proposalVersion] WHERE proposalID = @ProposalID), 1),
                    fileName, fileHash, size, format, uploadDate, validationStatusID, storageLocation, userID, institutionID, mediaTypeID, documentTypeID
             FROM #TempDocuments;
 
-        
-            -- Preparar para revisiÛn automatizada (solo si hay documentos)
             IF EXISTS (SELECT 1 FROM [dbo].[pv_proposalDocument] WHERE proposalID = @ProposalID)
             BEGIN
                 INSERT INTO [dbo].[pv_workFlowsInstances] (proposalDocumentID, dagRunID, dagURL, payload, bucketOrigin, validationStatusID, startedAt, finishedAt, createdAt, updatedAt, workflowsDefinitionID)
-                SELECT COALESCE(MAX(proposalDocumentID), (SELECT MAX(proposalDocumentID) FROM [dbo].[pv_proposalDocument])), -- Usar el ˙ltimo proposalDocumentID
+                SELECT COALESCE(MAX(proposalDocumentID), (SELECT MAX(proposalDocumentID) FROM [dbo].[pv_proposalDocument])),
                        'RUN_' + CAST(@ProposalID AS NVARCHAR(10)),
                        'http://workflow.local/run' + CAST(@ProposalID AS NVARCHAR(10)),
                        '{"title": "' + @Name + '"}',
@@ -264,39 +256,63 @@ BEGIN
                 FROM [dbo].[pv_proposalDocument] WHERE proposalID = @ProposalID;
             END
 
-
-            DROP TABLE IF EXISTS #TempDocuments;
-            DROP TABLE IF EXISTS #DebugDocuments;
+            DROP TABLE #TempDocuments;
+            DROP TABLE #DebugDocuments;
         END
 
-        -- Devolver resultado
+        DECLARE @VersionNumber DECIMAL(5,2) = 1.0;
+        DECLARE @ExistingVersionCount INT;
+
+        SELECT @ExistingVersionCount = COUNT(*) FROM [dbo].[pv_proposalVersion] WHERE proposalID = @ProposalID;
+        IF @ExistingVersionCount > 0
+            SET @VersionNumber = (SELECT MAX(versionNumber) + 0.1 FROM [dbo].[pv_proposalVersion] WHERE proposalID = @ProposalID);
+
+        INSERT INTO [dbo].[pv_proposalVersion] (proposalID, versionNumber, createdAt, madeChanges, versionStatus, contentHash, revisionComments)
+        VALUES (@ProposalID, @VersionNumber, @CurrentDate, 'Actualizaci√≥n de propuesta', 'Pendiente', @NewIntegrityHash, 'En revisi√≥n por IA');
+
         SELECT @ProposalID AS proposalID, @Status AS status;
 
-        -- Solo hacer COMMIT si iniciamos la transacciÛn
         IF @TransactionCountOnEntry = 0 AND @@TRANCOUNT > 0
             COMMIT TRANSACTION;
     END TRY
     BEGIN CATCH
-        -- Manejar rollback seg˙n si estamos en una transacciÛn anidada o no
         IF @TransactionCountOnEntry = 0 AND @@TRANCOUNT > 0
             ROLLBACK TRANSACTION;
         ELSE IF @TransactionCountOnEntry > 0 AND @@TRANCOUNT > 0
             ROLLBACK TRANSACTION sp_CreateUpdateProposal;
             
         SET @Status = 'Error: ' + ERROR_MESSAGE();
-        SELECT NULL AS proposalID, @Status AS status;
+        SET NOCOUNT OFF;
+        SELECT @ProposalID AS proposalID, @Status AS status;
     END CATCH
 END;
 GO
 
+-- Prueba para actualizar propuesta con usuario v√°lido para propuesta asignada y que tenga accountStatus = 1
 DECLARE @Status NVARCHAR(50);
+DECLARE @TargetGroupsTable [dbo].[TargetGroupsType];
+DECLARE @DocumentsTable [dbo].[DocumentsType];
+
+-- Insertar datos en la tabla temporal para @TargetGroups
+INSERT INTO @TargetGroupsTable (groupID)
+VALUES (1), (2);
+
+-- Insertar datos en la tabla temporal para @Documents
+INSERT INTO @DocumentsTable (fileName, size, format, uploadDate, validationStatusID, userID, institutionID, mediaTypeID, documentTypeID)
+VALUES 
+    ('Propuesta_Tecnica_V1.pdf', '1024', 'PDF', '2025-06-11 01:27:00', '2', '2', '1', '2', '1');
+
+-- Ejecutar el SP con las tablas temporales
 EXEC [dbo].[sp_CreateUpdateProposal]
     @ProposalID = 1,
     @Name = 'Prueba Simple',
     @UserID = 2,
     @ProposalTypeID = 1,
-    @TargetGroups = N'[{"groupID": 1}, {"groupID": 2}]',
-    @Documents = N'[{"fileName": "Propuesta_Tecnica_V1.pdf", "size": 1024, "format": "PDF", "uploadDate": "2025-06-11 01:27:00", "validationStatusID": 2, "userID": 1, "institutionID": 1, "mediaTypeID": 2, "documentTypeID": 1}]',
+    @TargetGroups = @TargetGroupsTable,
+    @Documents = @DocumentsTable,
     @Status = @Status OUTPUT;
+
 SELECT @Status AS Status;
--- Descomenta las lÌneas de depuraciÛn en el SP y ejecuta nuevamente para inspeccionar
+
+DECLARE @TargetGroupsTest [dbo].[TargetGroupsType];
+INSERT INTO @TargetGroupsTest (groupID) VALUES (1), (2); -- ‚Üê As√≠ espera recibir los datos

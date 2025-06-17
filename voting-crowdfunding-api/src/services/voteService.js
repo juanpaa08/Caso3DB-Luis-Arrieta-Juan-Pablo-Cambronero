@@ -1,14 +1,21 @@
 // src/services/voteService.js
 const CryptoJS = require('crypto-js');
-const { getUserById, getVotingById, hasVoted, recordVote, logWorkflow } = require('../data-access/voteData');
+const { getUserById, getVotingById, hasVoted, recordVote, logWorkflow, validateBiometric } = require('../data-access/voteData');
 const { pv_cryptographicKeys } = require('../models/associations');
 
-async function vote({ userID, votingID, proposalID, decision }) {
+async function vote({ userID, votingID, proposalID, decision, biometricDataID }) {
   console.log('Voting data from getVotingById:', await getVotingById(votingID));
   const user = await getUserById(userID);
   if (!user) {
     const err = new Error('Usuario no autorizado o inactivo');
     err.status = 403;
+    throw err;
+  }
+
+  // Validación de MFA y comprobación de vida
+  if (!biometricDataID || !await validateBiometric(userID, biometricDataID)) {
+    const err = new Error('Validación biométrica fallida o no habilitada');
+    err.status = 401;
     throw err;
   }
 

@@ -1,28 +1,17 @@
 // src/services/proposalService.js
-const crypto = require('crypto');
 const { createUpdateProposal } = require('../data-access/proposalData');
 
 async function createUpdateProposalService({ proposalID, title, userID, proposalTypeID, targetGroups, documents, token }) {
-  // No verificar el token aquí, asumimos que el handler lo hizo
-  const integrityHash = crypto.createHash('sha256').update(`${title}${Date.now()}`).digest('hex');
-  const aiPayload = { title };
-
   const result = await createUpdateProposal({
     proposalID,
     title,
     userID,
     proposalTypeID,
-    integrityHash,
-    targetGroups,
-    documents,
+    targetGroups: targetGroups || [],
+    documents: documents || [], // Asegúrate de que documents sea un array de objetos
   });
 
-  return {
-    proposalID: result.proposalID,
-    status: result.status,
-    integrityHash: result.integrityHash,
-    aiPayload,
-  };
+  return result; // Devolver el resultado tal cual, sin sobrescribir
 }
 
 module.exports = { createUpdateProposalService };

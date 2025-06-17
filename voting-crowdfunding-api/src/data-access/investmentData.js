@@ -10,40 +10,29 @@ async function invest(investmentData) {
       .input('amount', sql.Decimal(18, 2), investmentData.amount)
       .input('paymentMethodID', sql.Int, investmentData.paymentMethodID);
 
-    const result = await request.execute('sp_Invertir');
+    const result = await request.execute('invertir');
 
-    // Manejar los múltiples conjuntos de resultados
-    const contribution = result.recordsets[0][0]; // Primer conjunto: detalles de la contribución
-    const installments = result.recordsets[1]; // Segundo conjunto: cuotas
-    const reviews = result.recordsets[2]; // Tercer conjunto: revisiones
+    // Manejar el único conjunto de resultados
+    const contribution = result.recordset[0] || {};
 
     return {
       success: true,
-      contribution: {
-        contributionID: contribution.contributionID,
-        projectID: contribution.projectID,
-        userID: contribution.userID,
-        investedAmount: contribution.investedAmount,
-        totalRequested: contribution.totalRequested,
-        alreadyInvested: contribution.alreadyInvested,
-        equityPercent: contribution.equityPercent,
-        cryptoKeyID: contribution.cryptoKeyID,
-        cryptoKeyAction: contribution.cryptoKeyAction,
-        statusID: contribution.statusID,
+      data: {
+        contribution: {
+          contributionID: contribution.contributionID,
+          projectID: contribution.projectID,
+          userID: contribution.userID,
+          investedAmount: contribution.investedAmount,
+          totalRequested: contribution.totalRequested,
+          alreadyInvested: contribution.alreadyInvested,
+          equityPercent: contribution.equityPercent,
+          encryptedAmount: contribution.encryptedAmount,
+          prevHash: contribution.prevHash,
+        },
       },
-      installments: installments.map(i => ({
-        contributionID: i.contributionID,
-        dueDate: i.dueDate,
-        installmentAmount: i.installmentAmount,
-      })),
-      reviews: reviews.map(r => ({
-        contributionID: r.contributionID,
-        reviewDate: r.reviewDate,
-        milestone: r.milestone,
-      })),
     };
   } catch (err) {
-    throw new Error(`Error al llamar a sp_Invertir: ${err.message}`);
+    throw new Error(`Error al llamar a invertir: ${err.message}`);
   }
 }
 

@@ -43,20 +43,21 @@ module.exports.invest = async (event) => {
       statusCode: 200,
       body: JSON.stringify({
         success: result.success,
-        data: {
-          contribution: result.contribution,
-          installments: result.installments,
-          reviews: result.reviews,
-        },
+        data: result.data || {},
         message: 'Inversión procesada exitosamente',
       }),
       headers: { 'Access-Control-Allow-Origin': '*' },
     };
   } catch (err) {
     console.error('Error en invest:', err);
+    let statusCode = 500;
+    let errorMessage = err.message || 'Error del servidor';
+    if (err.message.includes('THROW')) {
+      statusCode = 400; // Asumir que los errores del SP son de validación
+    }
     return {
-      statusCode: 500,
-      body: JSON.stringify({ success: false, error: err.message }),
+      statusCode,
+      body: JSON.stringify({ success: false, error: errorMessage }),
       headers: { 'Access-Control-Allow-Origin': '*' },
     };
   }

@@ -1,3 +1,4 @@
+require('dotenv').config();
 const sql = require('mssql'); // <-- Usa mssql puro (sin msnodesqlv8)
 const { Sequelize } = require('sequelize');
 
@@ -10,6 +11,7 @@ const config = {
     encrypt: false, // Para desarrollo local
     trustServerCertificate: true, // Necesario si no tienes certificado SSL
   },
+  debug: true,
   pool: {
     max: 10,
     min: 1,

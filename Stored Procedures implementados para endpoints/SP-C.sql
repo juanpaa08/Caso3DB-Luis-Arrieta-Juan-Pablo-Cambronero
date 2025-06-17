@@ -184,11 +184,19 @@ GO
 -- EVIDENCIA B: prueba de ejecución
 	--------------------------------------------------------------------------------
 EXEC dbo.invertir
+<<<<<<< HEAD
 	  @projectID       = 2,
 	  @userID          = 151,
 	  @amount          = 2468.02,
 	  @paymentMethodID = 1;
 	GO
+=======
+  @projectID       = 2,
+  @userID          = 151,
+  @amount          = 2468.02,
+  @paymentMethodID = 1;
+GO
+>>>>>>> efc100fcf8ad17d36c85c33fe18aaef34138eb47
 
 --------------------------------------------------------------------------------
 -- EVIDENCIA C: verificar symmetric key usada
@@ -232,7 +240,7 @@ SELECT
   ) AS decryptedAmount
 FROM dbo.pv_crowdfundingContributions
 WHERE userID = 151
-  AND crowdfundinCotributionID = 8;  -- o el ID que corresponda
+  AND crowdfundinCotributionID = 19;  -- o el ID que corresponda
 
 -- Cierra la key
 CLOSE SYMMETRIC KEY [SK_User_151];
