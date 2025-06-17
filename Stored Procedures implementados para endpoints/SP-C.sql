@@ -182,13 +182,13 @@ GO
 
 --------------------------------------------------------------------------------
 -- EVIDENCIA B: prueba de ejecución
---------------------------------------------------------------------------------
+	--------------------------------------------------------------------------------
 EXEC dbo.invertir
-  @projectID       = 1,
-  @userID          = 151,
-  @amount          = 2468.02,
-  @paymentMethodID = 1;
-GO
+	  @projectID       = 2,
+	  @userID          = 151,
+	  @amount          = 2468.02,
+	  @paymentMethodID = 1;
+	GO
 
 --------------------------------------------------------------------------------
 -- EVIDENCIA C: verificar symmetric key usada
@@ -236,3 +236,21 @@ WHERE userID = 151
 
 -- Cierra la key
 CLOSE SYMMETRIC KEY [SK_User_151];
+
+
+USE [Caso3DB];
+GO
+
+SELECT
+  name                 AS symmetricKeyName,
+  KEY_GUID(name)       AS symmetricKeyGUID,
+  create_date          AS createdAt,
+  modify_date          AS lastModified
+FROM sys.symmetric_keys
+WHERE name LIKE 'SK_User_%'
+ORDER BY name;
+GO
+
+SELECT name 
+  FROM sys.symmetric_keys 
+ WHERE name = 'SK_User_153';
